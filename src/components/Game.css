@@ -1,0 +1,98 @@
+.game-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.board {
+    position: relative;
+    background-color: #2e8b57;
+    /* Grass green base */
+    border: 4px solid #333;
+}
+
+.cell {
+    position: absolute;
+    box-sizing: border-box;
+}
+
+.cell-1 {
+    /* Wall */
+    background-color: #555;
+    box-shadow: inset 2px 2px 5px rgba(255, 255, 255, 0.2), inset -2px -2px 5px rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+}
+
+.cell-2 {
+    /* Block */
+    background-color: #d2691e;
+    border: 1px solid #a0522d;
+}
+
+.entity {
+    position: absolute;
+    background-color: red;
+    border-radius: 50%;
+    transition: top 0.05s linear, left 0.05s linear;
+    /* Smooth interpolation */
+}
+
+.player {
+    background-color: white;
+    /* Temporary bomberman */
+    border: 2px solid blue;
+    z-index: 10;
+}
+
+.hud {
+    margin-top: 10px;
+    display: flex;
+    gap: 20px;
+    font-size: 1.2rem;
+    font-family: monospace;
+}
+
+.game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    color: red;
+    font-size: 3rem;
+    z-index: 100;
+}
+.bomb {
+  background-color: black;
+  border-radius: 50%;
+  border: 2px solid #555;
+  animation: pulse 0.5s infinite alternate;
+  z-index: 5;
+}
+
+.explosion {
+  background-color: orange;
+  border: none;
+  border-radius: 0;
+  z-index: 6;
+  opacity: 0.8;
+  mix-blend-mode: hard-light;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.1); }
+}
+
+.enemy {
+  background-color: purple;
+  border-radius: 50%; /* Blob */
+  border: 2px solid white;
+}
+
+.cell-3 { /* Door */
+  background-color: blue;
+  box-shadow: inset 0 0 10px yellow;
+}
