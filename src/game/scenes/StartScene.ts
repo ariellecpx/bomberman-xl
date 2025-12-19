@@ -350,7 +350,8 @@ export class StartScene extends Phaser.Scene {
             '↑ ↓ ← → Move',
             'SPACE Bomb',
             'B Detonate',
-            '2× SPACE Glove'
+            '2× SPACE Glove',
+            'V Portal'
         ];
 
         p1Controls.forEach((text, i) => {
@@ -376,7 +377,8 @@ export class StartScene extends Phaser.Scene {
             'W A S D Move',
             'E Bomb',
             'Q Detonate',
-            '2× E Glove'
+            '2× E Glove',
+            'R Portal'
         ];
 
         p2Controls.forEach((text, i) => {
@@ -405,7 +407,7 @@ export class StartScene extends Phaser.Scene {
             { icon: 'icon_remote', name: 'Remote', desc: 'Detonate' },
             { icon: 'icon_hand', name: 'Glove', desc: 'Throw' },
             { icon: 'icon_portal', name: 'Portal', desc: 'Teleport' },
-            { icon: 'icon_puppet', name: 'Puppet', desc: 'Control' }
+            { icon: 'icon_puppet', name: 'Puppet', desc: 'Mind Control' }
         ];
 
         const iconSize = 36;

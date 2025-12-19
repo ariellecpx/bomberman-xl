@@ -59,10 +59,12 @@ export class MainScene extends Phaser.Scene {
 
     private p2Keys!: {
         detonate: Phaser.Input.Keyboard.Key;
+        portal: Phaser.Input.Keyboard.Key;
     };
     private p1Keys!: {
         detonate: Phaser.Input.Keyboard.Key;
         throw: Phaser.Input.Keyboard.Key;
+        portal: Phaser.Input.Keyboard.Key;
     };
 
     // Glove/Carry State
@@ -79,6 +81,13 @@ export class MainScene extends Phaser.Scene {
     private p2LastWalkTime = 0;
     private WALK_ANIM_SPEED = 150; // ms per frame
     private currentConfig!: LevelConfig;
+
+    private hasPortal = false;
+    private p1Portals: Phaser.Physics.Arcade.Sprite[] = [];
+    private p2HasPortal = false;
+    private p2Portals: Phaser.Physics.Arcade.Sprite[] = [];
+    private lastTeleportP1 = 0;
+    private lastTeleportP2 = 0;
 
     init(data: { mode: string; level?: number }) {
         // Fallback if data is missing
@@ -97,10 +106,16 @@ export class MainScene extends Phaser.Scene {
         this.hasRemote = false;
         this.hasPowerBomb = false;
         this.p1RemoteBombs = [];
+        this.hasPortal = false;
+        this.p1Portals.forEach(p => p.destroy());
+        this.p1Portals = [];
         this.p2HasGlove = false;
         this.p2HasRemote = false;
         this.p2HasPowerBomb = false;
         this.p2RemoteBombs = [];
+        this.p2HasPortal = false;
+        this.p2Portals.forEach(p => p.destroy());
+        this.p2Portals = [];
 
         this.activeBombs = 0;
         this.playerRange = 2;
@@ -184,12 +199,23 @@ export class MainScene extends Phaser.Scene {
 
             this.p1Keys = this.input.keyboard.addKeys({
                 detonate: Phaser.Input.Keyboard.KeyCodes.B,
-                throw: Phaser.Input.Keyboard.KeyCodes.SPACE
+                throw: Phaser.Input.Keyboard.KeyCodes.SPACE,
+                portal: Phaser.Input.Keyboard.KeyCodes.V
             }) as any;
 
             this.p2Keys = this.input.keyboard.addKeys({
-                detonate: Phaser.Input.Keyboard.KeyCodes.Q
+                detonate: Phaser.Input.Keyboard.KeyCodes.Q,
+                portal: Phaser.Input.Keyboard.KeyCodes.R
             }) as any;
+        }
+
+        if (this.input.keyboard) {
+            this.p1Keys = {
+                ...this.p1Keys,
+                detonate: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B),
+                throw: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.G), // Example, check if needed
+                portal: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.V)
+            };
         }
 
         // 6. Collisions (P1)
@@ -207,6 +233,7 @@ export class MainScene extends Phaser.Scene {
         this.physics.add.collider(this.enemies, this.walls);
         this.physics.add.collider(this.enemies, this.blocks);
         this.physics.add.collider(this.enemies, this.bombs);
+        this.physics.add.collider(this.enemies, this.enemies); // Enemies should bump into each other
 
         this.physics.add.overlap(this.player, this.enemies, () => this.handlePlayerDeath(1), undefined, this);
         this.physics.add.overlap(this.explosions, this.player, () => this.handlePlayerDeath(1), undefined, this);
@@ -328,6 +355,13 @@ export class MainScene extends Phaser.Scene {
             if (this.hasRemote && this.p1Keys && this.p1Keys.detonate && this.p1Keys.detonate.isDown) {
                 this.detonateRemoteBombs(1);
             }
+
+            // Portal Placement Check
+            if (this.hasPortal && this.p1Keys && this.p1Keys.portal && Phaser.Input.Keyboard.JustDown(this.p1Keys.portal)) {
+                this.placePortal(1);
+            }
+
+            this.checkTeleport(1);
         }
 
         // P2 Logic
@@ -415,16 +449,29 @@ export class MainScene extends Phaser.Scene {
             if (this.p2HasRemote && this.p2Keys && this.p2Keys.detonate && this.p2Keys.detonate.isDown) {
                 this.detonateRemoteBombs(2);
             }
+
+            // Portal Check
+            if (this.p2HasPortal && this.p2Keys && this.p2Keys.portal && Phaser.Input.Keyboard.JustDown(this.p2Keys.portal)) {
+                this.placePortal(2);
+            }
+
+            this.checkTeleport(2);
         }
 
         // Enemy AI (Same as before)
         this.enemies.getChildren().forEach((e: any) => {
             const enemy = e as Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
             if (!enemy.active) return;
-            // ... (AI Logic omitted for brevity, keeping existing)
-            const type = enemy.getData('type');
-            if (enemy.body.blocked.up || enemy.body.blocked.down || enemy.body.blocked.left || enemy.body.blocked.right || enemy.body.velocity.length() === 0) {
+
+            // Check if they hit something (including bombs and blocks)
+            const isBlocked = enemy.body.blocked.left || enemy.body.blocked.right || enemy.body.blocked.up || enemy.body.blocked.down ||
+                enemy.body.touching.left || enemy.body.touching.right || enemy.body.touching.up || enemy.body.touching.down ||
+                enemy.body.velocity.length() < 10;
+
+            if (isBlocked) {
+                const type = enemy.getData('type');
                 const speed = (type === 3) ? 140 : 100;
+                // Pick a new random direction
                 const dirs = [{ x: speed, y: 0 }, { x: -speed, y: 0 }, { x: 0, y: speed }, { x: 0, y: -speed }];
                 let chosenDir = dirs[Math.floor(Math.random() * dirs.length)];
                 enemy.setVelocity(chosenDir.x, chosenDir.y);
@@ -484,6 +531,71 @@ export class MainScene extends Phaser.Scene {
             bomb.setData('isCarried', true);
             if (bomb.body) bomb.body.enable = false; // Disable physics while carried
         }
+    }
+
+    private placePortal(playerIdx: number) {
+        const p = playerIdx === 1 ? this.player : this.player2;
+        if (!p || !p.active) return;
+
+        const portals = playerIdx === 1 ? this.p1Portals : this.p2Portals;
+        const bx = Math.floor(p.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+        const by = Math.floor(p.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+
+        // Remove oldest if we already have 2
+        if (portals.length >= 2) {
+            const oldest = portals.shift();
+            oldest?.destroy();
+        }
+
+        const portal = this.physics.add.sprite(bx, by, 'icon_portal');
+        portal.setDisplaySize(70, 70);
+        portal.setDepth(50);
+        portal.setAlpha(0.8);
+        portal.setTint(playerIdx === 1 ? 0x00ffff : 0xff00ff);
+
+        // Pulse animation
+        this.tweens.add({
+            targets: portal,
+            scale: 0.9,
+            alpha: 0.6,
+            duration: 500,
+            yoyo: true,
+            repeat: -1
+        });
+
+        portals.push(portal);
+        soundManager.playBombPlace(); // Reuse sound for now
+    }
+
+    private checkTeleport(playerIdx: number) {
+        const p = playerIdx === 1 ? this.player : this.player2;
+        if (!p || !p.active) return;
+
+        const portals = playerIdx === 1 ? this.p1Portals : this.p2Portals;
+        if (portals.length < 2) return;
+
+        const now = this.time.now;
+        const lastTeleport = playerIdx === 1 ? this.lastTeleportP1 : this.lastTeleportP2;
+
+        if (now - lastTeleport < 1000) return; // 1s cooldown
+
+        portals.forEach((portal, index) => {
+            const distance = Phaser.Math.Distance.Between(p.x, p.y, portal.x, portal.y);
+            if (distance < 30) {
+                const otherPortal = portals[index === 0 ? 1 : 0];
+
+                // Teleport!
+                p.x = otherPortal.x;
+                p.y = otherPortal.y;
+
+                if (playerIdx === 1) this.lastTeleportP1 = now;
+                else this.lastTeleportP2 = now;
+
+                // Visual effect
+                this.cameras.main.flash(100, 0, 255, 255, true);
+                soundManager.playPowerupCollect(); // Warp sound
+            }
+        });
     }
 
     private throwBomb(playerIdx: number) {
@@ -858,7 +970,7 @@ export class MainScene extends Phaser.Scene {
                     const enemy = this.enemies.create(ex * TILE_SIZE + TILE_SIZE / 2, ey * TILE_SIZE + TILE_SIZE / 2, textureKey);
                     enemy.setData('type', typeId);
                     enemy.setDisplaySize(90, 90); // Scaled for 80px tiles
-                    enemy.setBounce(0.8); // Reduced bounce to prevent phasing through blocks
+                    enemy.setBounce(0); // Bouncing causes phasing through gaps
                     enemy.setCollideWorldBounds(true);
                     enemy.setVelocityX(this.currentConfig.enemySpeed);
                     enemy.body.setCircle(30); // Larger hitbox
@@ -1194,24 +1306,11 @@ export class MainScene extends Phaser.Scene {
             else if (kind === 'remote') this.hasRemote = true;
             else if (kind === 'glove') this.hasGlove = true;
             else if (kind === 'portal') {
-                // Portal: Phase through everything for 10 seconds
-                this.player.setTint(0x00ffff); // Cyan tint
-                this.physics.world.colliders.getActive().forEach((collider: any) => {
-                    if (collider.object1 === this.player && (collider.object2 === this.walls || collider.object2 === this.blocks)) {
-                        collider.active = false;
-                    }
-                });
-
-                // Re-enable collision after 10 seconds
-                this.time.delayedCall(10000, () => {
-                    if (this.player && this.player.active) {
-                        this.player.clearTint();
-                        this.physics.world.colliders.getActive().forEach((collider: any) => {
-                            if (collider.object1 === this.player && (collider.object2 === this.walls || collider.object2 === this.blocks)) {
-                                collider.active = true;
-                            }
-                        });
-                    }
+                // Portal: Enable dual-portal placement (V key)
+                this.hasPortal = true;
+                this.player.setTint(0x00ffff);
+                this.time.delayedCall(3000, () => {
+                    if (this.player && this.player.active) this.player.clearTint();
                 });
             }
             else if (kind === 'puppet') {
@@ -1249,25 +1348,12 @@ export class MainScene extends Phaser.Scene {
             else if (kind === 'remote') this.p2HasRemote = true;
             else if (kind === 'glove') this.p2HasGlove = true;
             else if (kind === 'portal') {
-                // Portal: Phase through everything for 10 seconds
+                // Portal: Enable dual-portal placement (R key)
+                this.p2HasPortal = true;
                 if (this.player2) {
-                    this.player2.setTint(0x00ffff); // Cyan tint
-                    this.physics.world.colliders.getActive().forEach((collider: any) => {
-                        if (collider.object1 === this.player2 && (collider.object2 === this.walls || collider.object2 === this.blocks)) {
-                            collider.active = false;
-                        }
-                    });
-
-                    // Re-enable collision after 10 seconds
-                    this.time.delayedCall(10000, () => {
-                        if (this.player2 && this.player2.active) {
-                            this.player2.clearTint();
-                            this.physics.world.colliders.getActive().forEach((collider: any) => {
-                                if (collider.object1 === this.player2 && (collider.object2 === this.walls || collider.object2 === this.blocks)) {
-                                    collider.active = true;
-                                }
-                            });
-                        }
+                    this.player2.setTint(0x00ffff);
+                    this.time.delayedCall(3000, () => {
+                        if (this.player2 && this.player2.active) this.player2.clearTint();
                     });
                 }
             }
