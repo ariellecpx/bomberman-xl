@@ -1125,14 +1125,40 @@ export class MainScene extends Phaser.Scene {
 
                     if (!isP1Safe && !isP2Safe) {
                         const blockTex = this.currentConfig.blockTexture;
+                        let shouldPlace = false;
+
+                        // Varied Layouts derived from Level ID
+                        const layoutType = (this.level - 1) % 4;
+
                         if (r === GRID_ROWS - 2 && c === GRID_COLS - 2 && !this.isTwoPlayer) {
+                            // Valid Door position always
                             this.door = this.physics.add.sprite(x, y, blockTex);
                             this.door.setVisible(false);
                             this.door.setDisplaySize(TILE_SIZE, TILE_SIZE);
-                            const b = this.blocks.create(x, y, blockTex);
-                            b.setDisplaySize(TILE_SIZE, TILE_SIZE);
-                            b.body.updateFromGameObject();
-                        } else if (Math.random() < this.currentConfig.blockDensity) {
+                            shouldPlace = true;
+                        } else {
+                            // Layout Algorithms
+                            if (layoutType === 0) {
+                                // 1. Classic Random (Level 1, 5, 9)
+                                shouldPlace = Math.random() < this.currentConfig.blockDensity;
+                            } else if (layoutType === 1) {
+                                // 2. Wide Corridors (Level 2, 6) - Clear every 2nd row partially
+                                if (r % 2 !== 0 && Math.random() < 0.3) shouldPlace = true; // Clearer rows
+                                else shouldPlace = Math.random() < this.currentConfig.blockDensity;
+                            } else if (layoutType === 2) {
+                                // 3. The Arena (Level 3, 7) - Empty Center
+                                const isCenter = r > 4 && r < GRID_ROWS - 5 && c > 6 && c < GRID_COLS - 7;
+                                if (isCenter && Math.random() < 0.2) shouldPlace = true; // Mostly empty center
+                                else shouldPlace = Math.random() < this.currentConfig.blockDensity;
+                            } else {
+                                // 4. The Bunker (Level 4, 8) - High density clusters
+                                const isCluster = (r % 3 === 0) || (c % 3 === 0);
+                                if (isCluster) shouldPlace = Math.random() < 0.9;
+                                else shouldPlace = Math.random() < 0.4;
+                            }
+                        }
+
+                        if (shouldPlace) {
                             const b = this.blocks.create(x, y, blockTex);
                             b.setDisplaySize(TILE_SIZE, TILE_SIZE);
                             b.body.updateFromGameObject();
@@ -1168,7 +1194,14 @@ export class MainScene extends Phaser.Scene {
                         return Math.abs(block.x - x) < 5 && Math.abs(block.y - y) < 5;
                     });
 
-                    safe = notInP1Zone && notOnWall && !blockAtPosition;
+                    // Ensure enemy is not trapped in a 1x1 hole
+                    let openNeighbors = 0;
+                    if (!this.isGridBlocked(x + TILE_SIZE, y)) openNeighbors++;
+                    if (!this.isGridBlocked(x - TILE_SIZE, y)) openNeighbors++;
+                    if (!this.isGridBlocked(x, y + TILE_SIZE)) openNeighbors++;
+                    if (!this.isGridBlocked(x, y - TILE_SIZE)) openNeighbors++;
+
+                    safe = notInP1Zone && notOnWall && !blockAtPosition && (openNeighbors >= 2);
                     attempts++;
                 }
 
@@ -1186,8 +1219,8 @@ export class MainScene extends Phaser.Scene {
                     } else {
                         enemy.setVelocityY(this.currentConfig.enemySpeed);
                     }
-                    enemy.body.setSize(60, 60); // Slightly smaller to prevent getting stuck on tile corners
-                    enemy.body.setOffset(15, 15);
+                    enemy.body.setSize(54, 54); // Significantly smaller to prevent corners sticking
+                    enemy.body.setOffset(18, 18);
                     enemy.setMaxVelocity(this.currentConfig.enemySpeed * 1.5, this.currentConfig.enemySpeed * 1.5); // Limit max speed
                     enemy.body.setImmovable(false); // Ensure they can be pushed by collisions
                 }
