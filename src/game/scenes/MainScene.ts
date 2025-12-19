@@ -58,6 +58,12 @@ export class MainScene extends Phaser.Scene {
     private p2HasPowerBomb = false;
     private p2RemoteBombs: Phaser.Physics.Arcade.Sprite[] = [];
 
+    // Level Mechanics
+    private darknessOverlay?: Phaser.GameObjects.Graphics;
+    private windEvent?: Phaser.Time.TimerEvent;
+    private isWindBlowing = false;
+    private windDirection = 1; // 1 = right, -1 = left
+
     private p2Keys!: {
         detonate: Phaser.Input.Keyboard.Key;
         portal: Phaser.Input.Keyboard.Key;
@@ -140,10 +146,47 @@ export class MainScene extends Phaser.Scene {
         } else {
         }
 
+        if (this.windEvent) {
+            this.windEvent.remove(false);
+            this.windEvent = undefined;
+        }
+
         // 0. Background / Floor
         this.floorLayer = this.add.tileSprite(0, 0, this.sys.game.config.width as number, this.sys.game.config.height as number, this.currentConfig.floorTexture);
         this.floorLayer.setOrigin(0, 0);
         this.floorLayer.setAlpha(0.5);
+
+        // --- SPECIAL RULE: DARKNESS ---
+        if (this.currentConfig.isDark) {
+            this.darknessOverlay = this.add.graphics();
+            this.darknessOverlay.setDepth(1000); // Top layer
+            this.darknessOverlay.setScrollFactor(0);
+        }
+
+        // --- SPECIAL RULE: WIND ---
+        if (this.currentConfig.hasWind) {
+            this.windEvent = this.time.addEvent({
+                delay: 4000, // Wind starts every 4 seconds
+                loop: true,
+                callback: () => {
+                    this.isWindBlowing = true;
+                    this.windDirection = Math.random() < 0.5 ? 1 : -1;
+
+                    // Show wind visual
+                    const text = this.add.text(this.scale.width / 2, 100, `💨 WIND ${this.windDirection > 0 ? '>>>' : '<<<'}`, { fontSize: '32px', color: '#00ffff', stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5).setDepth(2000);
+                    this.tweens.add({
+                        targets: text,
+                        alpha: 0,
+                        duration: 2000,
+                        onComplete: () => text.destroy()
+                    });
+
+                    this.time.delayedCall(2000, () => {
+                        this.isWindBlowing = false;
+                    });
+                }
+            });
+        }
 
         // 1. Setup Groups
         this.walls = this.physics.add.staticGroup();
@@ -279,6 +322,35 @@ export class MainScene extends Phaser.Scene {
     }
 
     update(time: number, _delta: number): void {
+        // No need to redefine time, it's a parameter
+
+        // --- SPECIAL RULE: DARKNESS UPDATE ---
+        if (this.currentConfig.isDark && this.darknessOverlay) {
+            this.darknessOverlay.clear();
+            this.darknessOverlay.fillStyle(0x000000, 0.95);
+            this.darknessOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
+
+            const mask = this.make.graphics({});
+            mask.fillStyle(0xffffff);
+
+            // Spotlight on Player 1
+            if (this.player.active) mask.fillCircle(this.player.x, this.player.y, 120);
+
+            // Spotlight on Player 2
+            if (this.isTwoPlayer && this.player2?.active) mask.fillCircle(this.player2.x, this.player2.y, 120);
+
+            // Spotlights on Bombs/Fire
+            this.bombs.getChildren().forEach((b: any) => mask.fillCircle(b.x, b.y, 80));
+            this.explosions.getChildren().forEach((e: any) => mask.fillCircle(e.x, e.y, 100));
+
+            // Create the cutout effect
+            const maskObj = mask.createGeometryMask();
+            maskObj.setInvertAlpha(true);
+            this.darknessOverlay.setMask(maskObj);
+        }
+
+        // --- SPECIAL RULE: ICE / WIND ---
+        this.handlePlayerMovementWithRules(time);
         this.checkGloveLogic();
         // P1 Logic
         if (this.player.active && this.cursors) {
@@ -288,7 +360,7 @@ export class MainScene extends Phaser.Scene {
             }
 
             const body = this.player.body;
-            body.setVelocity(0);
+            // Removed: body.setVelocity(0); -> We handle resetting via else-if blocks (standard) or Drag (Ice)
 
             let isMoving = false;
 
@@ -301,7 +373,12 @@ export class MainScene extends Phaser.Scene {
                 const centerY = Math.floor(this.player.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
                 const offset = centerY - this.player.y;
                 if (Math.abs(offset) < 25) body.setVelocityY(offset * 8);
-            } else if (this.cursors.right.isDown) {
+            } else if (!this.cursors.right.isDown && !this.currentConfig.hasIce) {
+                // Manually stop if no keys pressed AND not ice
+                body.setVelocityX(0);
+            }
+
+            if (this.cursors.right.isDown) {
                 body.setVelocityX(this.playerSpeed);
                 this.player.setFlipX(false);
                 this.p1LastDir = { x: 1, y: 0 };
@@ -320,7 +397,11 @@ export class MainScene extends Phaser.Scene {
                 const centerX = Math.floor(this.player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
                 const offset = centerX - this.player.x;
                 if (Math.abs(offset) < 25) body.setVelocityX(offset * 8);
-            } else if (this.cursors.down.isDown) {
+            } else if (!this.cursors.down.isDown && !this.currentConfig.hasIce) {
+                body.setVelocityY(0);
+            }
+
+            if (this.cursors.down.isDown) {
                 body.setVelocityY(this.playerSpeed);
                 this.p1LastDir = { x: 0, y: 1 };
                 isMoving = true;
@@ -328,6 +409,9 @@ export class MainScene extends Phaser.Scene {
                 const centerX = Math.floor(this.player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
                 const offset = centerX - this.player.x;
                 if (Math.abs(offset) < 25) body.setVelocityX(offset * 8);
+            } else if (!this.cursors.up.isDown && !this.currentConfig.hasIce) {
+                // If down isn't pressed either (handled above/implicitly), this ensures Y stops
+                if (!this.cursors.down.isDown) body.setVelocityY(0);
             }
 
 
@@ -348,7 +432,14 @@ export class MainScene extends Phaser.Scene {
 
             // Apply final normalization to maintain consistent speed
             if (body.velocity.x !== 0 || body.velocity.y !== 0) {
-                body.velocity.normalize().scale(this.playerSpeed);
+                if (!this.currentConfig.hasIce) {
+                    body.velocity.normalize().scale(this.playerSpeed);
+                } else {
+                    // Ice Physics: Cap speed instead of setting it directly
+                    if (body.velocity.length() > this.playerSpeed) {
+                        body.velocity.normalize().scale(this.playerSpeed);
+                    }
+                }
             }
 
             if (Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
@@ -979,6 +1070,36 @@ export class MainScene extends Phaser.Scene {
                     if (b.active) this.explode(b);
                 });
             }
+        }
+    }
+
+    private handlePlayerMovementWithRules(_time: number) {
+        if (!this.player.active) return;
+        const body = this.player.body as Phaser.Physics.Arcade.Body;
+        if (!body) return;
+
+        // --- WIND MECHANIC ---
+        if (this.currentConfig.hasWind && this.isWindBlowing) {
+            const windForce = 20 * this.windDirection;
+            body.velocity.x += windForce;
+
+            if (this.isTwoPlayer && this.player2?.active) {
+                const b2 = this.player2.body as Phaser.Physics.Arcade.Body;
+                if (b2) b2.velocity.x += windForce;
+            }
+
+            this.enemies.getChildren().forEach((e: any) => {
+                if (e.active) e.body.velocity.x += windForce * 0.5;
+            });
+        }
+
+        // --- ICE MECHANIC SETUP ---
+        if (this.currentConfig.hasIce) {
+            // Low drag allows sliding when velocity isn't manually set to 0
+            body.setDrag(100);
+        } else {
+            // High drag for instant stop (normal movement)
+            body.setDrag(2000);
         }
     }
 

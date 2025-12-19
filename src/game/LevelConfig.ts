@@ -8,6 +8,10 @@ export interface LevelConfig {
     enemySpeed: number;
     powerupChance: number;
     blockDensity: number;
+    // Special Rules
+    hasIce?: boolean;
+    hasWind?: boolean;
+    isDark?: boolean;
 }
 
 export const LEVELS: LevelConfig[] = [
@@ -42,7 +46,8 @@ export const LEVELS: LevelConfig[] = [
         enemyCount: 5,
         enemySpeed: 120,
         powerupChance: 0.3,
-        blockDensity: 0.65
+        blockDensity: 0.65,
+        hasIce: true
     },
     {
         level: 4,
@@ -64,7 +69,8 @@ export const LEVELS: LevelConfig[] = [
         enemyCount: 7,
         enemySpeed: 140,
         powerupChance: 0.25,
-        blockDensity: 0.75
+        blockDensity: 0.75,
+        hasWind: true
     },
     {
         level: 6,
@@ -75,7 +81,8 @@ export const LEVELS: LevelConfig[] = [
         enemyCount: 8,
         enemySpeed: 150,
         powerupChance: 0.25,
-        blockDensity: 0.8
+        blockDensity: 0.8,
+        hasIce: true
     },
     {
         level: 7,
@@ -108,7 +115,8 @@ export const LEVELS: LevelConfig[] = [
         enemyCount: 12,
         enemySpeed: 180,
         powerupChance: 0.1,
-        blockDensity: 0.95
+        blockDensity: 0.95,
+        isDark: true
     }
 ];
 
