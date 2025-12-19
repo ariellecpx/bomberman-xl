@@ -49,7 +49,7 @@ export const LEVELS: LevelConfig[] = [
         name: 'Flower Garden',
         blockTexture: 'flower_block',
         floorTexture: 'hd_floor_grass', // Generated
-        hardBlockTexture: 'hd_block_indestructible', // Default for now
+        hardBlockTexture: 'hd_block_garden_hard', // Generated
         enemyCount: 6,
         enemySpeed: 130,
         powerupChance: 0.3,
@@ -82,7 +82,7 @@ export const LEVELS: LevelConfig[] = [
         name: 'Mushroom Forest',
         blockTexture: 'shroom_block',
         floorTexture: 'hd_floor_grass',
-        hardBlockTexture: 'hd_block_indestructible',
+        hardBlockTexture: 'hd_block_garden_hard',
         enemyCount: 9,
         enemySpeed: 160,
         powerupChance: 0.2,

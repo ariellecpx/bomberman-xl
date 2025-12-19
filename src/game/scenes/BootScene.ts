@@ -49,6 +49,7 @@ export class BootScene extends Phaser.Scene {
         this.load.image('hd_block_wooden_hard', `assets/hd_block_wooden_hard.png?v=${v}`);
         this.load.image('hd_block_ice_hard', `assets/hd_block_ice_hard.png?v=${v}`);
         this.load.image('hd_block_molten_hard', `assets/hd_block_molten_hard.png?v=${v}`);
+        this.load.image('hd_block_garden_hard', `assets/hd_block_garden_hard.png?v=${v}`);
 
         this.load.image('hd_block', `assets/hd_block.png?v=${v}`);
         this.load.image('hd_floor', `assets/hd_floor.png?v=${v}`);
