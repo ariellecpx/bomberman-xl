@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { soundManager } from '../SoundManager';
 import { getLevelConfig } from '../LevelConfig';
 import type { LevelConfig } from '../LevelConfig';
+import WhiteReplacePipeline from '../pipelines/WhiteReplacePipeline';
 
 const TILE_SIZE = 80;  // Increased from 64 (25% bigger)
 const GRID_COLS = 24;  // Increased from 19 (widescreen)
@@ -89,6 +90,9 @@ export class MainScene extends Phaser.Scene {
     private lastTeleportP1 = 0;
     private lastTeleportP2 = 0;
 
+    private p1LastDir: { x: number, y: number } = { x: 1, y: 0 };
+    private p2LastDir: { x: number, y: number } = { x: -1, y: 0 };
+
     init(data: { mode: string; level?: number }) {
         // Fallback if data is missing
         this.isTwoPlayer = (data && data.mode === '2P') || false;
@@ -98,6 +102,12 @@ export class MainScene extends Phaser.Scene {
     }
 
     create() {
+        // Register individual pipelines for each player to allow independent coloring
+        if (this.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
+            this.renderer.pipelines.add('P1WhiteReplace', new WhiteReplacePipeline(this.game));
+            this.renderer.pipelines.add('P2WhiteReplace', new WhiteReplacePipeline(this.game));
+        }
+
         this.currentConfig = getLevelConfig(this.level);
         console.log(`Starting Level ${this.level}: ${this.currentConfig.name}`);
 
@@ -128,7 +138,6 @@ export class MainScene extends Phaser.Scene {
             this.p2BombsCount = 1;
             this.p2Speed = 150;
         } else {
-            this.player2 = null;
         }
 
         // 0. Background / Floor
@@ -160,8 +169,15 @@ export class MainScene extends Phaser.Scene {
             const startX = (GRID_COLS - 2) * TILE_SIZE + TILE_SIZE / 2;
             const startY = (GRID_ROWS - 2) * TILE_SIZE + TILE_SIZE / 2;
             this.player2 = this.physics.add.sprite(startX, startY, 'hd_player_ready');
-            this.player2.setTint(0xff0000); // Red tint for P2
-            this.player2.setDisplaySize(120, 120); // Perfect size for prominence
+
+            // Apply premium red coloring to white areas only
+            if (this.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
+                (this.player2 as any).setPipeline('P2WhiteReplace');
+                const pipe = this.renderer.pipelines.get('P2WhiteReplace') as WhiteReplacePipeline;
+                pipe.setTargetColor(0x333333); // Premium Dark Grey
+            }
+
+            this.player2.setDisplaySize(120, 120);
             this.player2.setCollideWorldBounds(true);
             this.player2.body.setCircle(20);
             this.player2.body.setOffset((this.player2.width / 2) - 20, (this.player2.height / 2) - 0);
@@ -240,8 +256,7 @@ export class MainScene extends Phaser.Scene {
         this.physics.add.overlap(this.explosions, this.enemies, this.handleEnemyDeath, undefined, this);
         this.physics.add.overlap(this.explosions, this.blocks, this.handleBlockDestroy, undefined, this);
         this.physics.add.overlap(this.explosions, this.bombs, this.handleBombChain, undefined, this);
-        // Don't destroy powerups with explosions - they should persist
-        // this.physics.add.overlap(this.explosions, this.powerups, this.handlePowerupDestroy, undefined, this);
+        this.physics.add.overlap(this.explosions, this.powerups, this.handlePowerupDestroy, undefined, this);
         this.physics.add.overlap(this.player, this.powerups, (p1, item) => this.handlePowerupCollect(p1, item, 1), undefined, this);
 
         // Music Start - Moved to end to ensure no error blocks it
@@ -278,6 +293,7 @@ export class MainScene extends Phaser.Scene {
             if (this.cursors.left.isDown) {
                 body.setVelocityX(-this.playerSpeed);
                 this.player.setFlipX(true);
+                this.p1LastDir = { x: -1, y: 0 };
                 isMoving = true;
                 // Auto-align to Y center (lane guiding)
                 const centerY = Math.floor(this.player.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
@@ -286,6 +302,7 @@ export class MainScene extends Phaser.Scene {
             } else if (this.cursors.right.isDown) {
                 body.setVelocityX(this.playerSpeed);
                 this.player.setFlipX(false);
+                this.p1LastDir = { x: 1, y: 0 };
                 isMoving = true;
                 // Auto-align to Y center
                 const centerY = Math.floor(this.player.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
@@ -295,6 +312,7 @@ export class MainScene extends Phaser.Scene {
 
             if (this.cursors.up.isDown) {
                 body.setVelocityY(-this.playerSpeed);
+                this.p1LastDir = { x: 0, y: -1 };
                 isMoving = true;
                 // Auto-align to X center
                 const centerX = Math.floor(this.player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
@@ -302,6 +320,7 @@ export class MainScene extends Phaser.Scene {
                 if (Math.abs(offset) < 25) body.setVelocityX(offset * 8);
             } else if (this.cursors.down.isDown) {
                 body.setVelocityY(this.playerSpeed);
+                this.p1LastDir = { x: 0, y: 1 };
                 isMoving = true;
                 // Auto-align to X center
                 const centerX = Math.floor(this.player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
@@ -319,7 +338,7 @@ export class MainScene extends Phaser.Scene {
                     this.player.setDisplaySize(120, 120);
                     this.p1LastWalkTime = time;
                 }
-            } else if (!isMoving && this.expressionTimer === 0) {
+            } else if (!isMoving) {
                 // Return to idle when stopped
                 this.player.setTexture('hd_player');
                 this.player.setDisplaySize(120, 120);
@@ -369,12 +388,13 @@ export class MainScene extends Phaser.Scene {
             const body2 = this.player2.body;
             body2.setVelocity(0);
 
-            let isMoving = false;
+            let isMoving2 = false;
 
             if (this.wasd.left.isDown) {
                 body2.setVelocityX(-this.p2Speed);
                 this.player2.setFlipX(true);
-                isMoving = true;
+                this.p2LastDir = { x: -1, y: 0 };
+                isMoving2 = true;
                 // Auto-align to Y center
                 const centerY = Math.floor(this.player2.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
                 const offset = centerY - this.player2.y;
@@ -382,7 +402,8 @@ export class MainScene extends Phaser.Scene {
             } else if (this.wasd.right.isDown) {
                 body2.setVelocityX(this.p2Speed);
                 this.player2.setFlipX(false);
-                isMoving = true;
+                this.p2LastDir = { x: 1, y: 0 };
+                isMoving2 = true;
                 // Auto-align to Y center
                 const centerY = Math.floor(this.player2.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
                 const offset = centerY - this.player2.y;
@@ -391,14 +412,16 @@ export class MainScene extends Phaser.Scene {
 
             if (this.wasd.up.isDown) {
                 body2.setVelocityY(-this.p2Speed);
-                isMoving = true;
+                this.p2LastDir = { x: 0, y: -1 };
+                isMoving2 = true;
                 // Auto-align to X center
                 const centerX = Math.floor(this.player2.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
                 const offset = centerX - this.player2.x;
                 if (Math.abs(offset) < 25) body2.setVelocityX(offset * 8);
             } else if (this.wasd.down.isDown) {
                 body2.setVelocityY(this.p2Speed);
-                isMoving = true;
+                this.p2LastDir = { x: 0, y: 1 };
+                isMoving2 = true;
                 // Auto-align to X center
                 const centerX = Math.floor(this.player2.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
                 const offset = centerX - this.player2.x;
@@ -406,19 +429,18 @@ export class MainScene extends Phaser.Scene {
             }
 
             // Walking animation for P2
-            if (isMoving) {
+            if (isMoving2) {
                 if (time - this.p2LastWalkTime > this.WALK_ANIM_SPEED) {
                     this.p2WalkFrame = (this.p2WalkFrame + 1) % 2;
                     const walkTexture = this.p2WalkFrame === 0 ? 'hd_player_left_step' : 'hd_player_right_step';
                     this.player2.setTexture(walkTexture);
-                    this.player2.setDisplaySize(70, 70);
+                    this.player2.setDisplaySize(120, 120);
                     this.p2LastWalkTime = time;
                 }
-            } else {
+            } else if (this.player2) {
                 // Return to idle when stopped
                 this.player2.setTexture('hd_player');
-                this.player2.setDisplaySize(70, 70);
-                this.player2.setTint(0xff0000); // Maintain red tint
+                this.player2.setDisplaySize(120, 120);
             }
 
             if (body2.velocity.x !== 0 || body2.velocity.y !== 0) {
@@ -458,35 +480,108 @@ export class MainScene extends Phaser.Scene {
             this.checkTeleport(2);
         }
 
-        // Enemy AI (Same as before)
+        // Enemy AI (Precision Grid-Bound)
         this.enemies.getChildren().forEach((e: any) => {
             const enemy = e as Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
-            if (!enemy.active) return;
+            if (!enemy.active || enemy.getData('isControlled')) return;
 
-            // Check if they hit something (including bombs and blocks)
-            const isBlocked = enemy.body.blocked.left || enemy.body.blocked.right || enemy.body.blocked.up || enemy.body.blocked.down ||
-                enemy.body.touching.left || enemy.body.touching.right || enemy.body.touching.up || enemy.body.touching.down ||
-                enemy.body.velocity.length() < 10;
+            const gx = Math.floor(enemy.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+            const gy = Math.floor(enemy.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+            const dist = Phaser.Math.Distance.Between(enemy.x, enemy.y, gx, gy);
 
-            if (isBlocked) {
+            // Rail Enforcement: Keep them perfectly on the center line of their current direction
+            const vx = enemy.body.velocity.x;
+            const vy = enemy.body.velocity.y;
+
+            if (vx !== 0) enemy.y = gy;
+            if (vy !== 0) enemy.x = gx;
+
+            if (dist < 10) { // Increased threshold for more reliable triggers
                 const type = enemy.getData('type');
                 const speed = (type === 3) ? 140 : 100;
-                // Pick a new random direction
-                const dirs = [{ x: speed, y: 0 }, { x: -speed, y: 0 }, { x: 0, y: speed }, { x: 0, y: -speed }];
-                let chosenDir = dirs[Math.floor(Math.random() * dirs.length)];
-                enemy.setVelocity(chosenDir.x, chosenDir.y);
+
+                // Decision Point: Are we blocked ahead?
+                let mustTurn = false;
+                if (vx > 0 && this.isGridBlocked(gx + TILE_SIZE, gy)) mustTurn = true;
+                else if (vx < 0 && this.isGridBlocked(gx - TILE_SIZE, gy)) mustTurn = true;
+                else if (vy > 0 && this.isGridBlocked(gx, gy + TILE_SIZE)) mustTurn = true;
+                else if (vy < 0 && this.isGridBlocked(gx, gy - TILE_SIZE)) mustTurn = true;
+                else if (vx === 0 && vy === 0) mustTurn = true;
+
+                if (mustTurn) {
+                    enemy.setPosition(gx, gy); // Precise snap when turning
+                    const dirs = [
+                        { x: speed, y: 0, tx: gx + TILE_SIZE, ty: gy },
+                        { x: -speed, y: 0, tx: gx - TILE_SIZE, ty: gy },
+                        { x: 0, y: speed, tx: gx, ty: gy + TILE_SIZE },
+                        { x: 0, y: -speed, tx: gx, ty: gy - TILE_SIZE }
+                    ];
+
+                    // Priority 1: Move forward or left/right (don't reverse unless necessary)
+                    const forwardOptions = dirs.filter(d => {
+                        if (vx > 0 && d.x < 0) return false;
+                        if (vx < 0 && d.x > 0) return false;
+                        if (vy > 0 && d.y < 0) return false;
+                        if (vy < 0 && d.y > 0) return false;
+                        return !this.isGridBlocked(d.tx, d.ty);
+                    });
+
+                    if (forwardOptions.length > 0) {
+                        const move = forwardOptions[Math.floor(Math.random() * forwardOptions.length)];
+                        enemy.setVelocity(move.x, move.y);
+                    } else {
+                        // Priority 2: Any valid direction (including reverse)
+                        const allValid = dirs.filter(d => !this.isGridBlocked(d.tx, d.ty));
+                        if (allValid.length > 0) {
+                            const move = allValid[Math.floor(Math.random() * allValid.length)];
+                            enemy.setVelocity(move.x, move.y);
+                        } else {
+                            enemy.setVelocity(0, 0); // Completely trapped
+                        }
+                    }
+                }
             }
         });
     }
 
+    private isGridBlocked(x: number, y: number): boolean {
+        // Precise center-to-center check with a 10px tolerance
+        const range = 10;
+        const walls = this.walls.getChildren();
+        for (let i = 0; i < walls.length; i++) {
+            const w = walls[i] as any;
+            if (Math.abs(w.x - x) < range && Math.abs(w.y - y) < range) return true;
+        }
+
+        const blocks = this.blocks.getChildren();
+        for (let i = 0; i < blocks.length; i++) {
+            const b = blocks[i] as any;
+            if (Math.abs(b.x - x) < range && Math.abs(b.y - y) < range) return true;
+        }
+
+        const bombs = this.bombs.getChildren();
+        for (let i = 0; i < bombs.length; i++) {
+            const b = bombs[i] as any;
+            if (Math.abs(b.x - x) < range && Math.abs(b.y - y) < range) return true;
+        }
+
+        if (x < 0 || x > (GRID_COLS * TILE_SIZE) || y < 0 || y > (GRID_ROWS * TILE_SIZE)) return true;
+
+        return false;
+    }
+
     private expressionTimer = 0;
-    private setPlayerExpression(texture: string, duration?: number) {
-        if (!this.player.active) return;
-        if (this.player.texture.key === 'hd_player_scared' && texture !== 'hd_player_scared') return;
-        this.player.setTexture(texture);
-        this.player.setDisplaySize(120, 120);
-        if (duration) this.expressionTimer = this.time.now + duration;
-        else this.expressionTimer = 0;
+    private setPlayerExpression(texture: string, duration?: number, playerIdx: number = 1) {
+        const p = playerIdx === 1 ? this.player : this.player2;
+        if (!p || !p.active) return;
+
+        p.setTexture(texture);
+        p.setDisplaySize(120, 120);
+
+        if (playerIdx === 1) {
+            if (duration) this.expressionTimer = this.time.now + duration;
+            else this.expressionTimer = 0;
+        }
     }
 
     private tryPickupBomb(playerIdx: number) {
@@ -579,14 +674,14 @@ export class MainScene extends Phaser.Scene {
 
         if (now - lastTeleport < 1000) return; // 1s cooldown
 
-        portals.forEach((portal, index) => {
+        for (let i = 0; i < portals.length; i++) {
+            const portal = portals[i];
             const distance = Phaser.Math.Distance.Between(p.x, p.y, portal.x, portal.y);
             if (distance < 30) {
-                const otherPortal = portals[index === 0 ? 1 : 0];
+                const otherPortal = portals[i === 0 ? 1 : 0];
 
                 // Teleport!
-                p.x = otherPortal.x;
-                p.y = otherPortal.y;
+                p.setPosition(otherPortal.x, otherPortal.y);
 
                 if (playerIdx === 1) this.lastTeleportP1 = now;
                 else this.lastTeleportP2 = now;
@@ -594,8 +689,11 @@ export class MainScene extends Phaser.Scene {
                 // Visual effect
                 this.cameras.main.flash(100, 0, 255, 255, true);
                 soundManager.playPowerupCollect(); // Warp sound
+
+                // Break out of loop to prevent immediate return trip
+                break;
             }
-        });
+        }
     }
 
     private throwBomb(playerIdx: number) {
@@ -606,14 +704,10 @@ export class MainScene extends Phaser.Scene {
 
         // Determine throw direction based on player facing
         const throwDistance = TILE_SIZE * 3;
-        let targetX = bomb.x;
-        let targetY = bomb.y;
+        const dir = playerIdx === 1 ? this.p1LastDir : this.p2LastDir;
 
-        if (p.flipX) {
-            targetX = bomb.x - throwDistance; // Facing left
-        } else {
-            targetX = bomb.x + throwDistance; // Facing right
-        }
+        let targetX = bomb.x + dir.x * throwDistance;
+        let targetY = bomb.y + dir.y * throwDistance;
 
         // Re-enable physics
         if (bomb.body) bomb.body.enable = true;
@@ -897,6 +991,84 @@ export class MainScene extends Phaser.Scene {
     }
 
     // Keep existing helpers...
+    private showVictory(winnerIdx: number) {
+        const { width, height } = this.scale;
+
+        // Darken overlay
+        this.add.rectangle(0, 0, width, height, 0x000000, 0.75).setOrigin(0).setDepth(2000);
+
+        // Confetti!
+        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
+        for (let i = 0; i < 150; i++) {
+            const x = Math.random() * width;
+            const y = -100 - (Math.random() * 500);
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const conf = this.add.rectangle(x, y, 10, 10, color).setDepth(2001);
+            this.tweens.add({
+                targets: conf,
+                y: height + 100,
+                x: x + (Math.random() - 0.5) * 400,
+                angle: 360 * 2,
+                duration: 3000 + Math.random() * 2000,
+                ease: 'Quad.easeIn',
+                onComplete: () => conf.destroy()
+            });
+        }
+
+        const victoryTitle = this.add.text(width / 2, height / 2 - 120, `PLAYER ${winnerIdx} YOU WON!`, {
+            fontFamily: '"Orbitron", -apple-system, sans-serif',
+            fontSize: '84px',
+            color: '#ffffff',
+            stroke: winnerIdx === 1 ? '#00ffff' : '#ff4444',
+            strokeThickness: 12,
+            shadow: { offsetX: 0, offsetY: 0, color: winnerIdx === 1 ? '#00ffff' : '#ff4444', blur: 50, stroke: true, fill: true },
+            align: 'center'
+        }).setOrigin(0.5).setDepth(2002);
+
+        this.tweens.add({
+            targets: victoryTitle,
+            scale: 1.05,
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // Modern Frosted Buttons
+        const createVictoryBtn = (y: number, text: string, type: 'play' | 'quit') => {
+            const container = this.add.container(width / 2, y);
+            const bg = this.add.graphics();
+            bg.fillStyle(0xffffff, 0.08).fillRoundedRect(-160, -35, 320, 70, 35);
+            bg.lineStyle(2, 0xffffff, 0.15).strokeRoundedRect(-160, -35, 320, 70, 35);
+
+            const btnText = this.add.text(0, 0, text, {
+                fontFamily: '"Orbitron", sans-serif',
+                fontSize: '26px',
+                color: '#ffffff'
+            }).setOrigin(0.5);
+
+            container.add([bg, btnText]);
+            container.setDepth(2002).setInteractive(new Phaser.Geom.Rectangle(-160, -35, 320, 70), Phaser.Geom.Rectangle.Contains);
+
+            container.on('pointerover', () => {
+                const color = type === 'play' ? 0x00cc44 : 0xcc3333;
+                bg.clear().fillGradientStyle(color, color, color, color, 0.3, 0.3, 0.4, 0.4).fillRoundedRect(-160, -35, 320, 70, 35);
+                this.tweens.add({ targets: container, scale: 1.05, duration: 200 });
+            });
+            container.on('pointerout', () => {
+                bg.clear().fillStyle(0xffffff, 0.08).fillRoundedRect(-160, -35, 320, 70, 35).lineStyle(2, 0xffffff, 0.15).strokeRoundedRect(-160, -35, 320, 70, 35);
+                this.tweens.add({ targets: container, scale: 1.0, duration: 200 });
+            });
+            container.on('pointerdown', () => {
+                if (type === 'play') this.scene.restart({ mode: '2P' });
+                else this.scene.start('StartScene');
+            });
+        };
+
+        createVictoryBtn(height / 2 + 60, 'PLAY AGAIN', 'play');
+        createVictoryBtn(height / 2 + 160, 'MAIN MENU', 'quit');
+    }
+
     private generateLevel() {
         // Walls
         for (let r = 0; r < GRID_ROWS; r++) {
@@ -924,7 +1096,7 @@ export class MainScene extends Phaser.Scene {
                             const b = this.blocks.create(x, y, this.currentConfig.blockTexture);
                             b.setDisplaySize(TILE_SIZE, TILE_SIZE);
                             b.body.updateFromGameObject();
-                        } else if (Math.random() < 0.6) { // More blocks for denser levels
+                        } else if (Math.random() < this.currentConfig.blockDensity) {
                             const b = this.blocks.create(x, y, this.currentConfig.blockTexture);
                             b.setDisplaySize(TILE_SIZE, TILE_SIZE);
                             b.body.updateFromGameObject();
@@ -969,11 +1141,17 @@ export class MainScene extends Phaser.Scene {
                     const textureKey = `enemy_${typeId}`;
                     const enemy = this.enemies.create(ex * TILE_SIZE + TILE_SIZE / 2, ey * TILE_SIZE + TILE_SIZE / 2, textureKey);
                     enemy.setData('type', typeId);
-                    enemy.setDisplaySize(90, 90); // Scaled for 80px tiles
-                    enemy.setBounce(0); // Bouncing causes phasing through gaps
+                    enemy.setDisplaySize(90, 90);
+                    enemy.setBounce(0);
                     enemy.setCollideWorldBounds(true);
-                    enemy.setVelocityX(this.currentConfig.enemySpeed);
-                    enemy.body.setCircle(30); // Larger hitbox
+                    // Random initial direction for enemies
+                    if (Math.random() < 0.5) {
+                        enemy.setVelocityX(this.currentConfig.enemySpeed);
+                    } else {
+                        enemy.setVelocityY(this.currentConfig.enemySpeed);
+                    }
+                    enemy.body.setSize(60, 60); // Slightly smaller to prevent getting stuck on tile corners
+                    enemy.body.setOffset(15, 15);
                     enemy.setMaxVelocity(this.currentConfig.enemySpeed * 1.5, this.currentConfig.enemySpeed * 1.5); // Limit max speed
                     enemy.body.setImmovable(false); // Ensure they can be pushed by collisions
                 }
@@ -1065,7 +1243,7 @@ export class MainScene extends Phaser.Scene {
             this.player.body.enable = false;
 
             // Show scared expression
-            this.setPlayerExpression('hd_player_scared', 2000);
+            this.setPlayerExpression('hd_player_scared', 2000, 1);
 
             // Spin and shrink animation
             this.tweens.add({
@@ -1078,20 +1256,27 @@ export class MainScene extends Phaser.Scene {
                 ease: 'Cubic.easeIn'
             });
 
-            // Restart after animation
-            this.time.delayedCall(1800, () => {
-                this.scene.restart({ mode: this.isTwoPlayer ? '2P' : '1P' });
-            });
+            // Restart or Show Victory
+            if (this.isTwoPlayer) {
+                this.showVictory(2);
+            } else {
+                this.time.delayedCall(1800, () => {
+                    this.scene.restart({ mode: this.isTwoPlayer ? '2P' : '1P' });
+                });
+            }
 
         } else if (this.player2) {
             if (!this.player2.active) return;
             console.log("P2 Died");
 
+            // Show scared expression
+            this.setPlayerExpression('hd_player_scared', 2000, 2);
+
             // Death animation for P2
             this.player2.setVelocity(0);
             this.player2.body.enable = false;
 
-            // Spin and shrink animation
+            // Death animation for P2
             this.tweens.add({
                 targets: this.player2,
                 angle: 720,
@@ -1102,9 +1287,8 @@ export class MainScene extends Phaser.Scene {
                 ease: 'Cubic.easeIn'
             });
 
-            this.time.delayedCall(1800, () => {
-                this.scene.restart({ mode: this.isTwoPlayer ? '2P' : '1P' });
-            });
+            // Show Victory for P1
+            this.showVictory(1);
         }
     }
 
@@ -1128,7 +1312,7 @@ export class MainScene extends Phaser.Scene {
                     this.time.delayedCall(100, () => {
                         const remainingEnemies = this.enemies.getChildren().filter((e: any) => e.active).length;
                         if (remainingEnemies === 0) {
-                            this.handleLevelWin();
+                            this.showLevelComplete();
                         }
                     });
                 }
@@ -1136,88 +1320,82 @@ export class MainScene extends Phaser.Scene {
         });
     }
 
-    private handleLevelWin() {
-        // Stop player movement
-        if (this.player && this.player.active) {
-            this.player.setVelocity(0);
-            this.player.body.enable = false;
-        }
-
-        // Victory message
+    private showLevelComplete() {
         const { width, height } = this.scale;
 
-        // Dark overlay
-        const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
-        overlay.setOrigin(0, 0);
-        overlay.setDepth(1000);
+        // Overlay darken
+        this.add.rectangle(0, 0, width, height, 0x000000, 0.7).setOrigin(0).setDepth(1000);
 
-        // Victory text
-        const victoryText = this.add.text(width / 2, height / 2 - 80, 'LEVEL COMPLETE!', {
-            fontFamily: '"Orbitron", sans-serif',
-            fontSize: '72px',
-            color: '#00ff00',
-            stroke: '#ffffff',
-            strokeThickness: 6
-        });
-        victoryText.setOrigin(0.5);
-        victoryText.setDepth(1001);
+        const victoryText = this.add.text(width / 2, height / 2 - 120, 'LEVEL CLEAR!', {
+            fontFamily: '"Orbitron", -apple-system, sans-serif',
+            fontSize: '96px',
+            color: '#ffffff',
+            stroke: '#00ff88',
+            strokeThickness: 10,
+            shadow: { offsetX: 0, offsetY: 0, color: '#00ff88', blur: 40, stroke: true, fill: true }
+        }).setOrigin(0.5).setDepth(1001);
 
-        // Pulse animation
         this.tweens.add({
             targets: victoryText,
-            scale: 1.1,
-            duration: 500,
+            scale: 1.05,
+            duration: 800,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
 
-        // Next level button
-        const nextButton = this.add.text(width / 2, height / 2 + 40, 'NEXT LEVEL', {
-            fontFamily: 'sans-serif',
-            fontSize: '36px',
-            color: '#ffffff',
-            backgroundColor: '#00aa00',
-            padding: { x: 30, y: 15 }
-        });
-        nextButton.setOrigin(0.5);
-        nextButton.setDepth(1001);
-        nextButton.setInteractive({ useHandCursor: true });
+        // 1. Frosted Glass Button: NEXT LEVEL
+        const nextBtnContainer = this.add.container(width / 2, height / 2 + 50);
+        const nextBtnBg = this.add.graphics();
+        nextBtnBg.fillStyle(0xffffff, 0.08).fillRoundedRect(-150, -35, 300, 70, 35);
+        nextBtnBg.lineStyle(2, 0xffffff, 0.15).strokeRoundedRect(-150, -35, 300, 70, 35);
 
-        nextButton.on('pointerover', () => {
-            nextButton.setScale(1.1);
-        });
+        const nextBtnText = this.add.text(0, 0, 'NEXT LEVEL', {
+            fontFamily: '"Orbitron", sans-serif',
+            fontSize: '28px',
+            color: '#ffffff'
+        }).setOrigin(0.5);
 
-        nextButton.on('pointerout', () => {
-            nextButton.setScale(1);
-        });
+        nextBtnContainer.add([nextBtnBg, nextBtnText]);
+        nextBtnContainer.setDepth(1001).setInteractive(new Phaser.Geom.Rectangle(-150, -35, 300, 70), Phaser.Geom.Rectangle.Contains);
 
-        nextButton.on('pointerdown', () => {
+        nextBtnContainer.on('pointerover', () => {
+            nextBtnBg.clear().fillGradientStyle(0x44ff88, 0x44ff88, 0x22cc66, 0x22cc66, 0.3, 0.3, 0.4, 0.4).fillRoundedRect(-150, -35, 300, 70, 35);
+            this.tweens.add({ targets: nextBtnContainer, scale: 1.05, duration: 200, ease: 'Cubic.easeOut' });
+        });
+        nextBtnContainer.on('pointerout', () => {
+            nextBtnBg.clear().fillStyle(0xffffff, 0.08).fillRoundedRect(-150, -35, 300, 70, 35).lineStyle(2, 0xffffff, 0.15).strokeRoundedRect(-150, -35, 300, 70, 35);
+            this.tweens.add({ targets: nextBtnContainer, scale: 1.0, duration: 200, ease: 'Cubic.easeOut' });
+        });
+        nextBtnContainer.on('pointerdown', () => {
             this.level++;
             this.scene.restart({ mode: '1P', level: this.level });
         });
 
-        // Menu button
-        const menuButton = this.add.text(width / 2, height / 2 + 120, 'MAIN MENU', {
-            fontFamily: 'sans-serif',
-            fontSize: '36px',
-            color: '#ffffff',
-            backgroundColor: '#666666',
-            padding: { x: 30, y: 15 }
-        });
-        menuButton.setOrigin(0.5);
-        menuButton.setDepth(1001);
-        menuButton.setInteractive({ useHandCursor: true });
+        // 2. Frosted Glass Button: MAIN MENU
+        const menuBtnContainer = this.add.container(width / 2, height / 2 + 150);
+        const menuBtnBg = this.add.graphics();
+        menuBtnBg.fillStyle(0xffffff, 0.08).fillRoundedRect(-150, -35, 300, 70, 35);
+        menuBtnBg.lineStyle(2, 0xffffff, 0.15).strokeRoundedRect(-150, -35, 300, 70, 35);
 
-        menuButton.on('pointerover', () => {
-            menuButton.setScale(1.1);
-        });
+        const menuBtnText = this.add.text(0, 0, 'MAIN MENU', {
+            fontFamily: '"Orbitron", sans-serif',
+            fontSize: '28px',
+            color: '#ffffff'
+        }).setOrigin(0.5);
 
-        menuButton.on('pointerout', () => {
-            menuButton.setScale(1);
-        });
+        menuBtnContainer.add([menuBtnBg, menuBtnText]);
+        menuBtnContainer.setDepth(1001).setInteractive(new Phaser.Geom.Rectangle(-150, -35, 300, 70), Phaser.Geom.Rectangle.Contains);
 
-        menuButton.on('pointerdown', () => {
+        menuBtnContainer.on('pointerover', () => {
+            menuBtnBg.clear().fillGradientStyle(0x666666, 0x666666, 0x333333, 0x333333, 0.3, 0.3, 0.4, 0.4).fillRoundedRect(-150, -35, 300, 70, 35);
+            this.tweens.add({ targets: menuBtnContainer, scale: 1.05, duration: 200, ease: 'Cubic.easeOut' });
+        });
+        menuBtnContainer.on('pointerout', () => {
+            menuBtnBg.clear().fillStyle(0xffffff, 0.08).fillRoundedRect(-150, -35, 300, 70, 35).lineStyle(2, 0xffffff, 0.15).strokeRoundedRect(-150, -35, 300, 70, 35);
+            this.tweens.add({ targets: menuBtnContainer, scale: 1.0, duration: 200, ease: 'Cubic.easeOut' });
+        });
+        menuBtnContainer.on('pointerdown', () => {
             this.scene.start('StartScene');
         });
     }
@@ -1290,6 +1468,12 @@ export class MainScene extends Phaser.Scene {
         }
     }
 
+    private handlePowerupDestroy(_explosion: any, powerup: any) {
+        if (powerup.active) {
+            powerup.destroy();
+        }
+    }
+
     private handlePowerupCollect(_player: any, powerup: any, playerIdx: number) {
         soundManager.playPowerupCollect();
 
@@ -1297,7 +1481,7 @@ export class MainScene extends Phaser.Scene {
         // Fallback for types not set 
 
         if (playerIdx === 1) {
-            this.setPlayerExpression('hd_player_happy', 1000);
+            this.setPlayerExpression('hd_player_happy', 1000, 1);
 
             if (kind === 'flame') this.playerRange++;
             else if (kind === 'bombup') this.playerBombsCount++;
@@ -1306,26 +1490,37 @@ export class MainScene extends Phaser.Scene {
             else if (kind === 'remote') this.hasRemote = true;
             else if (kind === 'glove') this.hasGlove = true;
             else if (kind === 'portal') {
-                // Portal: Enable dual-portal placement (V key)
                 this.hasPortal = true;
-                this.player.setTint(0x00ffff);
+                this.setPlayerExpression('hd_player', 0, 1);
+                if (this.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
+                    (this.player as any).setPipeline('P1WhiteReplace');
+                    const pipe = this.renderer.pipelines.get('P1WhiteReplace') as WhiteReplacePipeline;
+                    pipe.setTargetColor(0x00ffff); // Cyan
+                }
+                this.player.setDisplaySize(120, 120);
                 this.time.delayedCall(3000, () => {
-                    if (this.player && this.player.active) this.player.clearTint();
+                    if (this.player && this.player.active) {
+                        (this.player as any).resetPipeline();
+                    }
                 });
             }
             else if (kind === 'puppet') {
-                // Puppet: Mind Control - Enemies stop and become harmless
-                this.player.setTint(0xff66ff); // Pink/Purple tint
+                this.setPlayerExpression('hd_player', 0, 1);
+                if (this.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
+                    (this.player as any).setPipeline('P1WhiteReplace');
+                    const pipe = this.renderer.pipelines.get('P1WhiteReplace') as WhiteReplacePipeline;
+                    pipe.setTargetColor(0xff66ff); // Magenta
+                }
+                this.player.setDisplaySize(120, 120);
                 this.enemies.getChildren().forEach((e: any) => {
                     e.setTint(0xff66ff);
                     e.setData('isControlled', true);
-                    e.body.enable = false; // Disable their physics/collision damage
+                    e.body.enable = false;
                 });
 
-                // Release after 10 seconds
                 this.time.delayedCall(10000, () => {
                     if (this.player && this.player.active) {
-                        this.player.clearTint();
+                        (this.player as any).resetPipeline();
                     }
                     this.enemies.getChildren().forEach((e: any) => {
                         e.clearTint();
@@ -1344,6 +1539,45 @@ export class MainScene extends Phaser.Scene {
             if (kind === 'flame') this.p2Range++;
             else if (kind === 'bombup') this.p2BombsCount++;
             else if (kind === 'skates') this.p2Speed += 20;
+            else if (kind === 'portal') {
+                this.p2HasPortal = true;
+                if (this.player2 && this.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
+                    (this.player2 as any).setPipeline('P2WhiteReplace');
+                    const pipe = this.renderer.pipelines.get('P2WhiteReplace') as WhiteReplacePipeline;
+                    pipe.setTargetColor(0xff00ff); // Magenta-ish for P2 portal
+                    this.player2.setDisplaySize(120, 120);
+                    this.time.delayedCall(3000, () => {
+                        if (this.player2 && this.player2.active && this.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
+                            const p = this.renderer.pipelines.get('P2WhiteReplace') as WhiteReplacePipeline;
+                            p.setTargetColor(0x333333); // Revert to Grey
+                        }
+                    });
+                }
+            }
+            else if (kind === 'puppet') {
+                if (this.player2 && this.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
+                    (this.player2 as any).setPipeline('P2WhiteReplace');
+                    const pipe = this.renderer.pipelines.get('P2WhiteReplace') as WhiteReplacePipeline;
+                    pipe.setTargetColor(0xff66ff);
+                    this.player2.setDisplaySize(120, 120);
+                }
+                this.enemies.getChildren().forEach((e: any) => {
+                    e.setTint(0xff66ff);
+                    e.setData('isControlled', true);
+                    e.body.enable = false;
+                });
+                this.time.delayedCall(10000, () => {
+                    if (this.player2 && this.player2.active && this.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
+                        const p = this.renderer.pipelines.get('P2WhiteReplace') as WhiteReplacePipeline;
+                        p.setTargetColor(0x333333); // Revert to Grey
+                    }
+                    this.enemies.getChildren().forEach((e: any) => {
+                        e.clearTint();
+                        e.setData('isControlled', false);
+                        e.body.enable = true;
+                    });
+                });
+            }
             else if (kind === 'powerbomb') this.p2HasPowerBomb = true;
             else if (kind === 'remote') this.p2HasRemote = true;
             else if (kind === 'glove') this.p2HasGlove = true;
