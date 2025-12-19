@@ -1,9 +1,7 @@
 import Phaser from 'phaser';
 import { soundManager } from '../SoundManager';
-// TODO: Integrate particle effects and level system
-// import { ParticleManager } from '../ParticleManager';
-// import { getLevelConfig } from '../LevelConfig';
-// import type { LevelConfig } from '../LevelConfig';
+import { getLevelConfig } from '../LevelConfig';
+import type { LevelConfig } from '../LevelConfig';
 
 const TILE_SIZE = 80;  // Increased from 64 (25% bigger)
 const GRID_COLS = 24;  // Increased from 19 (widescreen)
@@ -80,13 +78,20 @@ export class MainScene extends Phaser.Scene {
     private p2WalkFrame = 0;
     private p2LastWalkTime = 0;
     private WALK_ANIM_SPEED = 150; // ms per frame
+    private currentConfig!: LevelConfig;
 
-    init(data: { mode: string }) {
+    init(data: { mode: string; level?: number }) {
         // Fallback if data is missing
         this.isTwoPlayer = (data && data.mode === '2P') || false;
+        if (data && data.level !== undefined) {
+            this.level = data.level;
+        }
     }
 
     create() {
+        this.currentConfig = getLevelConfig(this.level);
+        console.log(`Starting Level ${this.level}: ${this.currentConfig.name}`);
+
         // Reset Powerups
         this.hasGlove = false;
         this.hasRemote = false;
@@ -209,6 +214,17 @@ export class MainScene extends Phaser.Scene {
         this.input.once('pointerdown', () => {
             soundManager.playBackgroundMusic();
         });
+
+        // 7. Level Info UI
+        const infoText = this.add.text(this.scale.width / 2, 25, `Level ${this.level}: ${this.currentConfig.name}`, {
+            fontFamily: '"Orbitron", sans-serif',
+            fontSize: '28px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 4
+        });
+        infoText.setOrigin(0.5);
+        infoText.setDepth(2000);
     }
 
     update(time: number, _delta: number): void {
@@ -727,10 +743,10 @@ export class MainScene extends Phaser.Scene {
                 const y = r * TILE_SIZE + TILE_SIZE / 2;
 
                 if (r === 0 || r === GRID_ROWS - 1 || c === 0 || c === GRID_COLS - 1 || (r % 2 === 0 && c % 2 === 0)) {
-                    // Start Indestructible Wall - Darker version of brick_block
-                    const w = this.walls.create(x, y, 'brick_block');
+                    // Start Indestructible Wall - Darker version of current level's block
+                    const w = this.walls.create(x, y, this.currentConfig.blockTexture);
                     w.setDisplaySize(TILE_SIZE, TILE_SIZE);
-                    w.setTint(0x666666); // Darker tint
+                    w.setTint(this.currentConfig.wallTint); // Theme-specific darker tint
                     w.body.updateFromGameObject();
                 } else {
                     // Safe zone logic for P1 (Top Left) AND P2 (Bottom Right)
@@ -739,15 +755,15 @@ export class MainScene extends Phaser.Scene {
 
                     if (!isP1Safe && !isP2Safe) {
                         if (r === GRID_ROWS - 2 && c === GRID_COLS - 2 && !this.isTwoPlayer) {
-                            // Door only needed for single player usually, but let's leave it
-                            this.door = this.physics.add.sprite(x, y, 'brick_block');
+                            // Door only needed for single player usually
+                            this.door = this.physics.add.sprite(x, y, this.currentConfig.blockTexture);
                             this.door.setVisible(false);
                             this.door.setDisplaySize(TILE_SIZE, TILE_SIZE);
-                            const b = this.blocks.create(x, y, 'brick_block');
+                            const b = this.blocks.create(x, y, this.currentConfig.blockTexture);
                             b.setDisplaySize(TILE_SIZE, TILE_SIZE);
                             b.body.updateFromGameObject();
-                        } else if (Math.random() < 0.4) {
-                            const b = this.blocks.create(x, y, 'brick_block');
+                        } else if (Math.random() < 0.6) { // More blocks for denser levels
+                            const b = this.blocks.create(x, y, this.currentConfig.blockTexture);
                             b.setDisplaySize(TILE_SIZE, TILE_SIZE);
                             b.body.updateFromGameObject();
                         }
@@ -760,7 +776,7 @@ export class MainScene extends Phaser.Scene {
 
         // Enemies
         if (!this.isTwoPlayer) {
-            const count = Math.min(this.level + 2, 10);
+            const count = this.currentConfig.enemyCount;
             for (let i = 0; i < count; i++) {
                 let ex = 0, ey = 0;
                 let safe = false;
@@ -794,9 +810,9 @@ export class MainScene extends Phaser.Scene {
                     enemy.setDisplaySize(90, 90); // Scaled for 80px tiles
                     enemy.setBounce(0.8); // Reduced bounce to prevent phasing through blocks
                     enemy.setCollideWorldBounds(true);
-                    enemy.setVelocityX(100);
+                    enemy.setVelocityX(this.currentConfig.enemySpeed);
                     enemy.body.setCircle(30); // Larger hitbox
-                    enemy.setMaxVelocity(150, 150); // Limit max speed
+                    enemy.setMaxVelocity(this.currentConfig.enemySpeed * 1.5, this.currentConfig.enemySpeed * 1.5); // Limit max speed
                     enemy.body.setImmovable(false); // Ensure they can be pushed by collisions
                 }
             }
@@ -1016,7 +1032,7 @@ export class MainScene extends Phaser.Scene {
 
         nextButton.on('pointerdown', () => {
             this.level++;
-            this.scene.restart({ mode: '1P' });
+            this.scene.restart({ mode: '1P', level: this.level });
         });
 
         // Menu button
@@ -1051,7 +1067,7 @@ export class MainScene extends Phaser.Scene {
 
             // Delay powerup spawn slightly so explosion clears first
             this.time.delayedCall(100, () => {
-                if (Math.random() < 0.3) { // Balanced spawn rate (30%)
+                if (Math.random() < this.currentConfig.powerupChance) { // Use level-specific spawn rate
                     const rand = Math.random();
                     console.log('Spawning powerup, rand:', rand);
 
