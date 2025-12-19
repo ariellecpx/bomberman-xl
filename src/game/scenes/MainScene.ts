@@ -161,8 +161,9 @@ export class MainScene extends Phaser.Scene {
         this.expressionTimer = this.time.now + 2000;
         this.player.setDisplaySize(120, 120); // Perfect size for prominence
         this.player.setCollideWorldBounds(true);
-        this.player.body.setCircle(20); // Circle hitbox slides better around corners
-        this.player.body.setOffset((this.player.width / 2) - 20, (this.player.height / 2) - 0); // Bottom-aligned circle
+        this.player.setDepth(10); // Ensure player renders above floor/blocks
+        this.player.body.setSize(40, 32); // Rectangular hitbox for the feet
+        this.player.body.setOffset((this.player.width - 40) / 2, this.player.height - 32); // Align to bottom
 
         // 4. Player 2
         if (this.isTwoPlayer) {
@@ -179,8 +180,9 @@ export class MainScene extends Phaser.Scene {
 
             this.player2.setDisplaySize(120, 120);
             this.player2.setCollideWorldBounds(true);
-            this.player2.body.setCircle(20);
-            this.player2.body.setOffset((this.player2.width / 2) - 20, (this.player2.height / 2) - 0);
+            this.player2.setDepth(10);
+            this.player2.body.setSize(40, 32);
+            this.player2.body.setOffset((this.player2.width - 40) / 2, this.player2.height - 32);
 
             this.physics.add.collider(this.player2, this.walls);
             this.physics.add.collider(this.player2, this.blocks);
@@ -498,10 +500,11 @@ export class MainScene extends Phaser.Scene {
 
             const now = time;
             const lastDecision = enemy.getData('lastDecision') || 0;
-            const isStuck = vx === 0 && vy === 0;
+            // Use a threshold for stuck detection (physics engine noise)
+            const isStuck = Math.abs(vx) < 10 && Math.abs(vy) < 10;
 
-            // Decision cooldown to prevent high-frequency shaking
-            if ((dist < 10 || isStuck) && (now - lastDecision > 300)) {
+            // Decision cooldown (reduced to 150ms for snappier recovery)
+            if ((dist < 10 || isStuck) && (now - lastDecision > 150)) {
                 const type = enemy.getData('type');
                 const speed = (type === 3) ? 140 : 100;
 
@@ -1438,8 +1441,8 @@ export class MainScene extends Phaser.Scene {
         if (block.active) {
             console.log('Block destroyed at', block.x, block.y);
 
-            // Delay powerup spawn slightly so explosion clears first
-            this.time.delayedCall(100, () => {
+            // Delay powerup spawn so explosion clears first (Explosion lasts 500ms)
+            this.time.delayedCall(600, () => {
                 if (Math.random() < this.currentConfig.powerupChance) { // Use level-specific spawn rate
                     const rand = Math.random();
                     console.log('Spawning powerup, rand:', rand);
