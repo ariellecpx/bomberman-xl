@@ -2,6 +2,8 @@ export interface LevelConfig {
     level: number;
     name: string;
     blockTexture: string;
+    floorTexture: string; // New: Dynamic background
+    hardBlockTexture: string; // New: Dynamic indestructible wall
     enemyCount: number;
     enemySpeed: number;
     powerupChance: number;
@@ -13,6 +15,8 @@ export const LEVELS: LevelConfig[] = [
         level: 1,
         name: 'Brick Ruins',
         blockTexture: 'hd_block_destructible',
+        floorTexture: 'hd_floor',
+        hardBlockTexture: 'hd_block_indestructible',
         enemyCount: 3,
         enemySpeed: 100,
         powerupChance: 0.4,
@@ -22,6 +26,8 @@ export const LEVELS: LevelConfig[] = [
         level: 2,
         name: 'Wooden Village',
         blockTexture: 'wood_block',
+        floorTexture: 'hd_wooden_background', // User provided
+        hardBlockTexture: 'hd_block_wooden_hard', // Generated
         enemyCount: 4,
         enemySpeed: 110,
         powerupChance: 0.35,
@@ -31,6 +37,8 @@ export const LEVELS: LevelConfig[] = [
         level: 3,
         name: 'Ice Palace',
         blockTexture: 'ice_block',
+        floorTexture: 'hd_floor_ice', // Generated
+        hardBlockTexture: 'hd_block_ice_hard', // Generated
         enemyCount: 5,
         enemySpeed: 120,
         powerupChance: 0.3,
@@ -40,6 +48,8 @@ export const LEVELS: LevelConfig[] = [
         level: 4,
         name: 'Flower Garden',
         blockTexture: 'flower_block',
+        floorTexture: 'hd_floor_grass', // Generated
+        hardBlockTexture: 'hd_block_indestructible', // Default for now
         enemyCount: 6,
         enemySpeed: 130,
         powerupChance: 0.3,
@@ -49,6 +59,8 @@ export const LEVELS: LevelConfig[] = [
         level: 5,
         name: 'Circus Arena',
         blockTexture: 'circus_block',
+        floorTexture: 'hd_floor',
+        hardBlockTexture: 'hd_block_indestructible',
         enemyCount: 7,
         enemySpeed: 140,
         powerupChance: 0.25,
@@ -58,6 +70,8 @@ export const LEVELS: LevelConfig[] = [
         level: 6,
         name: 'Frozen Wasteland',
         blockTexture: 'frozen_block',
+        floorTexture: 'hd_floor_ice',
+        hardBlockTexture: 'hd_block_ice_hard',
         enemyCount: 8,
         enemySpeed: 150,
         powerupChance: 0.25,
@@ -67,6 +81,8 @@ export const LEVELS: LevelConfig[] = [
         level: 7,
         name: 'Mushroom Forest',
         blockTexture: 'shroom_block',
+        floorTexture: 'hd_floor_grass',
+        hardBlockTexture: 'hd_block_indestructible',
         enemyCount: 9,
         enemySpeed: 160,
         powerupChance: 0.2,
@@ -76,6 +92,8 @@ export const LEVELS: LevelConfig[] = [
         level: 8,
         name: 'Molten Core',
         blockTexture: 'molten_block',
+        floorTexture: 'hd_floor_molten', // Generated
+        hardBlockTexture: 'hd_block_molten_hard', // Generated
         enemyCount: 10,
         enemySpeed: 170,
         powerupChance: 0.15,
@@ -85,6 +103,8 @@ export const LEVELS: LevelConfig[] = [
         level: 9,
         name: 'Dirt Cavern',
         blockTexture: 'dirt_block',
+        floorTexture: 'hd_floor',
+        hardBlockTexture: 'hd_block_indestructible',
         enemyCount: 12,
         enemySpeed: 180,
         powerupChance: 0.1,

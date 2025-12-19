@@ -46,9 +46,16 @@ export class BootScene extends Phaser.Scene {
         // New HD Blocks
         this.load.image('hd_block_destructible', `assets/hd_block_destructible.png?v=${v}`);
         this.load.image('hd_block_indestructible', `assets/hd_block_indestructible.png?v=${v}`);
+        this.load.image('hd_block_wooden_hard', `assets/hd_block_wooden_hard.png?v=${v}`);
+        this.load.image('hd_block_ice_hard', `assets/hd_block_ice_hard.png?v=${v}`);
+        this.load.image('hd_block_molten_hard', `assets/hd_block_molten_hard.png?v=${v}`);
 
         this.load.image('hd_block', `assets/hd_block.png?v=${v}`);
         this.load.image('hd_floor', `assets/hd_floor.png?v=${v}`);
+        this.load.image('hd_floor_ice', `assets/hd_floor_ice.png?v=${v}`);
+        this.load.image('hd_floor_molten', `assets/hd_floor_molten.png?v=${v}`);
+        this.load.image('hd_floor_grass', `assets/hd_floor_grass.png?v=${v}`);
+        this.load.image('hd_wooden_background', `assets/hd_wooden_background.png?v=${v}`);
         // Bomb animation stages
         this.load.image('hd_bomb', `assets/hd_bomb.png?v=${v}`);
         this.load.image('hd_bomb_stage_1', `assets/hd_bomb_stage_1.png?v=${v}`);

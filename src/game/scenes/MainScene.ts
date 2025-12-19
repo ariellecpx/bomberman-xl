@@ -141,7 +141,7 @@ export class MainScene extends Phaser.Scene {
         }
 
         // 0. Background / Floor
-        this.floorLayer = this.add.tileSprite(0, 0, this.sys.game.config.width as number, this.sys.game.config.height as number, 'hd_floor');
+        this.floorLayer = this.add.tileSprite(0, 0, this.sys.game.config.width as number, this.sys.game.config.height as number, this.currentConfig.floorTexture);
         this.floorLayer.setOrigin(0, 0);
         this.floorLayer.setAlpha(0.5);
 
@@ -1114,8 +1114,8 @@ export class MainScene extends Phaser.Scene {
                 const y = r * TILE_SIZE + TILE_SIZE / 2;
 
                 if (r === 0 || r === GRID_ROWS - 1 || c === 0 || c === GRID_COLS - 1 || (r % 2 === 0 && c % 2 === 0)) {
-                    // HD Indestructible Wall
-                    const w = this.walls.create(x, y, 'hd_block_indestructible');
+                    // HD Indestructible Wall (Dynamic)
+                    const w = this.walls.create(x, y, this.currentConfig.hardBlockTexture);
                     w.setDisplaySize(TILE_SIZE, TILE_SIZE);
                     w.body.updateFromGameObject();
                 } else {
