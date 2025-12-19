@@ -496,20 +496,25 @@ export class MainScene extends Phaser.Scene {
             if (vx !== 0) enemy.y = gy;
             if (vy !== 0) enemy.x = gx;
 
-            if (dist < 10) { // Increased threshold for more reliable triggers
+            const isStuck = vx === 0 && vy === 0;
+
+            if (dist < 10 || isStuck) { // Decision Point: center of tile OR stopped
                 const type = enemy.getData('type');
                 const speed = (type === 3) ? 140 : 100;
 
                 // Decision Point: Are we blocked ahead?
-                let mustTurn = false;
-                if (vx > 0 && this.isGridBlocked(gx + TILE_SIZE, gy)) mustTurn = true;
-                else if (vx < 0 && this.isGridBlocked(gx - TILE_SIZE, gy)) mustTurn = true;
-                else if (vy > 0 && this.isGridBlocked(gx, gy + TILE_SIZE)) mustTurn = true;
-                else if (vy < 0 && this.isGridBlocked(gx, gy - TILE_SIZE)) mustTurn = true;
-                else if (vx === 0 && vy === 0) mustTurn = true;
+                let mustTurn = isStuck;
+                if (!mustTurn) {
+                    if (vx > 0 && this.isGridBlocked(gx + TILE_SIZE, gy)) mustTurn = true;
+                    else if (vx < 0 && this.isGridBlocked(gx - TILE_SIZE, gy)) mustTurn = true;
+                    else if (vy > 0 && this.isGridBlocked(gx, gy + TILE_SIZE)) mustTurn = true;
+                    else if (vy < 0 && this.isGridBlocked(gx, gy - TILE_SIZE)) mustTurn = true;
+                }
 
                 if (mustTurn) {
-                    enemy.setPosition(gx, gy); // Precise snap when turning
+                    // Only snap if we are changing direction or stuck
+                    if (dist < 20) enemy.setPosition(gx, gy);
+
                     const dirs = [
                         { x: speed, y: 0, tx: gx + TILE_SIZE, ty: gy },
                         { x: -speed, y: 0, tx: gx - TILE_SIZE, ty: gy },
