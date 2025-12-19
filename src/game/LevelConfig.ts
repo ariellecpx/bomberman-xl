@@ -12,7 +12,7 @@ export const LEVELS: LevelConfig[] = [
     {
         level: 1,
         name: 'Brick Ruins',
-        blockTexture: 'brick_block',
+        blockTexture: 'hd_block_destructible',
         enemyCount: 3,
         enemySpeed: 100,
         powerupChance: 0.4,

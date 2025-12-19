@@ -1124,7 +1124,7 @@ export class MainScene extends Phaser.Scene {
                     const isP2Safe = (r > GRID_ROWS - 4 && c > GRID_COLS - 4);
 
                     if (!isP1Safe && !isP2Safe) {
-                        const blockTex = 'hd_block_destructible';
+                        const blockTex = this.currentConfig.blockTexture;
                         if (r === GRID_ROWS - 2 && c === GRID_COLS - 2 && !this.isTwoPlayer) {
                             this.door = this.physics.add.sprite(x, y, blockTex);
                             this.door.setVisible(false);
