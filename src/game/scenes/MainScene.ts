@@ -496,13 +496,15 @@ export class MainScene extends Phaser.Scene {
             if (vx !== 0) enemy.y = gy;
             if (vy !== 0) enemy.x = gx;
 
+            const now = time;
+            const lastDecision = enemy.getData('lastDecision') || 0;
             const isStuck = vx === 0 && vy === 0;
 
-            if (dist < 10 || isStuck) { // Decision Point: center of tile OR stopped
+            // Decision cooldown to prevent high-frequency shaking
+            if ((dist < 10 || isStuck) && (now - lastDecision > 300)) {
                 const type = enemy.getData('type');
                 const speed = (type === 3) ? 140 : 100;
 
-                // Decision Point: Are we blocked ahead?
                 let mustTurn = isStuck;
                 if (!mustTurn) {
                     if (vx > 0 && this.isGridBlocked(gx + TILE_SIZE, gy)) mustTurn = true;
@@ -512,8 +514,9 @@ export class MainScene extends Phaser.Scene {
                 }
 
                 if (mustTurn) {
-                    // Only snap if we are changing direction or stuck
-                    if (dist < 20) enemy.setPosition(gx, gy);
+                    enemy.setData('lastDecision', now);
+                    // Snap precisely to grid center when turning or stuck to prevent drift
+                    enemy.setPosition(gx, gy);
 
                     const dirs = [
                         { x: speed, y: 0, tx: gx + TILE_SIZE, ty: gy },
@@ -522,8 +525,9 @@ export class MainScene extends Phaser.Scene {
                         { x: 0, y: -speed, tx: gx, ty: gy - TILE_SIZE }
                     ];
 
-                    // Priority 1: Move forward or left/right (don't reverse unless necessary)
-                    const forwardOptions = dirs.filter(d => {
+                    // Priority 1: Forward or Left/Right (No U-Turn)
+                    const choices = dirs.filter(d => {
+                        // Avoid U-Turns unless forced
                         if (vx > 0 && d.x < 0) return false;
                         if (vx < 0 && d.x > 0) return false;
                         if (vy > 0 && d.y < 0) return false;
@@ -531,17 +535,17 @@ export class MainScene extends Phaser.Scene {
                         return !this.isGridBlocked(d.tx, d.ty);
                     });
 
-                    if (forwardOptions.length > 0) {
-                        const move = forwardOptions[Math.floor(Math.random() * forwardOptions.length)];
+                    if (choices.length > 0) {
+                        const move = Phaser.Utils.Array.GetRandom(choices);
                         enemy.setVelocity(move.x, move.y);
                     } else {
-                        // Priority 2: Any valid direction (including reverse)
-                        const allValid = dirs.filter(d => !this.isGridBlocked(d.tx, d.ty));
-                        if (allValid.length > 0) {
-                            const move = allValid[Math.floor(Math.random() * allValid.length)];
+                        // Priority 2: U-Turn fallback
+                        const fallback = dirs.filter(d => !this.isGridBlocked(d.tx, d.ty));
+                        if (fallback.length > 0) {
+                            const move = Phaser.Utils.Array.GetRandom(fallback);
                             enemy.setVelocity(move.x, move.y);
                         } else {
-                            enemy.setVelocity(0, 0); // Completely trapped
+                            enemy.setVelocity(0, 0); // Trapped
                         }
                     }
                 }
@@ -1082,10 +1086,9 @@ export class MainScene extends Phaser.Scene {
                 const y = r * TILE_SIZE + TILE_SIZE / 2;
 
                 if (r === 0 || r === GRID_ROWS - 1 || c === 0 || c === GRID_COLS - 1 || (r % 2 === 0 && c % 2 === 0)) {
-                    // Start Indestructible Wall - Darker version of current level's block
-                    const w = this.walls.create(x, y, this.currentConfig.blockTexture);
+                    // HD Indestructible Wall
+                    const w = this.walls.create(x, y, 'hd_block_indestructible');
                     w.setDisplaySize(TILE_SIZE, TILE_SIZE);
-                    w.setTint(this.currentConfig.wallTint); // Theme-specific darker tint
                     w.body.updateFromGameObject();
                 } else {
                     // Safe zone logic for P1 (Top Left) AND P2 (Bottom Right)
@@ -1093,16 +1096,16 @@ export class MainScene extends Phaser.Scene {
                     const isP2Safe = (r > GRID_ROWS - 4 && c > GRID_COLS - 4);
 
                     if (!isP1Safe && !isP2Safe) {
+                        const blockTex = 'hd_block_destructible';
                         if (r === GRID_ROWS - 2 && c === GRID_COLS - 2 && !this.isTwoPlayer) {
-                            // Door only needed for single player usually
-                            this.door = this.physics.add.sprite(x, y, this.currentConfig.blockTexture);
+                            this.door = this.physics.add.sprite(x, y, blockTex);
                             this.door.setVisible(false);
                             this.door.setDisplaySize(TILE_SIZE, TILE_SIZE);
-                            const b = this.blocks.create(x, y, this.currentConfig.blockTexture);
+                            const b = this.blocks.create(x, y, blockTex);
                             b.setDisplaySize(TILE_SIZE, TILE_SIZE);
                             b.body.updateFromGameObject();
                         } else if (Math.random() < this.currentConfig.blockDensity) {
-                            const b = this.blocks.create(x, y, this.currentConfig.blockTexture);
+                            const b = this.blocks.create(x, y, blockTex);
                             b.setDisplaySize(TILE_SIZE, TILE_SIZE);
                             b.body.updateFromGameObject();
                         }

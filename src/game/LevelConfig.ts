@@ -2,7 +2,6 @@ export interface LevelConfig {
     level: number;
     name: string;
     blockTexture: string;
-    wallTint: number; // For the indestructible walls
     enemyCount: number;
     enemySpeed: number;
     powerupChance: number;
@@ -14,7 +13,6 @@ export const LEVELS: LevelConfig[] = [
         level: 1,
         name: 'Brick Ruins',
         blockTexture: 'brick_block',
-        wallTint: 0x666666,
         enemyCount: 3,
         enemySpeed: 100,
         powerupChance: 0.4,
@@ -24,7 +22,6 @@ export const LEVELS: LevelConfig[] = [
         level: 2,
         name: 'Wooden Village',
         blockTexture: 'wood_block',
-        wallTint: 0x8B4513,
         enemyCount: 4,
         enemySpeed: 110,
         powerupChance: 0.35,
@@ -34,7 +31,6 @@ export const LEVELS: LevelConfig[] = [
         level: 3,
         name: 'Ice Palace',
         blockTexture: 'ice_block',
-        wallTint: 0x4B9CD3,
         enemyCount: 5,
         enemySpeed: 120,
         powerupChance: 0.3,
@@ -44,7 +40,6 @@ export const LEVELS: LevelConfig[] = [
         level: 4,
         name: 'Flower Garden',
         blockTexture: 'flower_block',
-        wallTint: 0x8B008B,
         enemyCount: 6,
         enemySpeed: 130,
         powerupChance: 0.3,
@@ -54,7 +49,6 @@ export const LEVELS: LevelConfig[] = [
         level: 5,
         name: 'Circus Arena',
         blockTexture: 'circus_block',
-        wallTint: 0xAA0000,
         enemyCount: 7,
         enemySpeed: 140,
         powerupChance: 0.25,
@@ -64,7 +58,6 @@ export const LEVELS: LevelConfig[] = [
         level: 6,
         name: 'Frozen Wasteland',
         blockTexture: 'frozen_block',
-        wallTint: 0x2F4F4F,
         enemyCount: 8,
         enemySpeed: 150,
         powerupChance: 0.25,
@@ -74,7 +67,6 @@ export const LEVELS: LevelConfig[] = [
         level: 7,
         name: 'Mushroom Forest',
         blockTexture: 'shroom_block',
-        wallTint: 0x556B2F,
         enemyCount: 9,
         enemySpeed: 160,
         powerupChance: 0.2,
@@ -84,7 +76,6 @@ export const LEVELS: LevelConfig[] = [
         level: 8,
         name: 'Molten Core',
         blockTexture: 'molten_block',
-        wallTint: 0x442200,
         enemyCount: 10,
         enemySpeed: 170,
         powerupChance: 0.15,
@@ -94,7 +85,6 @@ export const LEVELS: LevelConfig[] = [
         level: 9,
         name: 'Dirt Cavern',
         blockTexture: 'dirt_block',
-        wallTint: 0x333333,
         enemyCount: 12,
         enemySpeed: 180,
         powerupChance: 0.1,

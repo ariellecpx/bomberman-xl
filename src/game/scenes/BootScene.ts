@@ -43,6 +43,10 @@ export class BootScene extends Phaser.Scene {
         this.load.image('brick_block', `assets/brick_block_8.png?v=${v}`);
         this.load.image('dirt_block', `assets/dirt_block_9.png?v=${v}`);
 
+        // New HD Blocks
+        this.load.image('hd_block_destructible', `assets/hd_block_destructible.png?v=${v}`);
+        this.load.image('hd_block_indestructible', `assets/hd_block_indestructible.png?v=${v}`);
+
         this.load.image('hd_block', `assets/hd_block.png?v=${v}`);
         this.load.image('hd_floor', `assets/hd_floor.png?v=${v}`);
         // Bomb animation stages
