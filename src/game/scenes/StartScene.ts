@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 import { startScreenMusic, gameMusic } from '../AudioPlayer';
+import { LEVELS } from '../LevelConfig';
 
 export class StartScene extends Phaser.Scene {
+    private selectedLevel = 1;
+
     constructor() {
         super('StartScene');
     }
@@ -132,8 +135,8 @@ export class StartScene extends Phaser.Scene {
         });
 
         // Bomberman hero in center - HUGE for widescreen
-        const hero = this.add.image(width / 2, height / 2 + 50, 'hd_player_ready');
-        hero.setDisplaySize(500, 500); // Bigger for widescreen
+        const hero = this.add.image(width / 2, height / 2 - 40, 'hd_player_ready');
+        hero.setDisplaySize(420, 420); // Slightly smaller to prevent title clash
         hero.setAlpha(0.7);
         hero.setDepth(3);
 
@@ -172,7 +175,7 @@ export class StartScene extends Phaser.Scene {
                         // Change expression
                         currentExpressionIndex = (currentExpressionIndex + 1) % expressions.length;
                         hero.setTexture(expressions[currentExpressionIndex]);
-                        hero.setDisplaySize(360, 360); // Ensure size stays consistent
+                        hero.setDisplaySize(420, 420); // Ensure size stays consistent
 
                         // Fade in
                         this.tweens.add({
@@ -619,16 +622,79 @@ export class StartScene extends Phaser.Scene {
                 this.time.delayedCall(2000, () => {
                     startScreenMusic.stop();
                     gameMusic.play();
-                    this.scene.start('MainScene', { mode });
+                    this.scene.start('MainScene', {
+                        mode,
+                        level: mode === '1P' ? this.selectedLevel : 1
+                    });
                 });
             });
 
             return container;
         };
 
-        const buttonsY = height - 280;
+        const buttonsY = height - 220; // Moved down 
         createButton(buttonsY, '1 Player', '1P', [0x44ff88, 0x22cc66]);
         createButton(buttonsY + 75, '2 Players', '2P', [0x44ccff, 0x2288cc]);
+
+        // Level Selector (Only for 1P)
+        const levelSelectorY = buttonsY - 100;
+        const levelContainer = this.add.container(width / 2, levelSelectorY);
+
+        const levelBg = this.add.graphics();
+        levelBg.fillStyle(0xffffff, 0.08);
+        levelBg.fillRoundedRect(-200, -30, 400, 60, 30);
+        levelBg.lineStyle(1, 0xffffff, 0.15);
+        levelBg.strokeRoundedRect(-200, -30, 400, 60, 30);
+        levelContainer.add(levelBg);
+
+        const levelText = this.add.text(0, 0, `Level ${this.selectedLevel}: ${LEVELS[this.selectedLevel - 1].name}`, {
+            fontFamily: '"Orbitron", sans-serif',
+            fontSize: '18px',
+            color: '#ffffff',
+            fontStyle: '500'
+        }).setOrigin(0.5);
+        levelContainer.add(levelText);
+
+        const updateLevelUI = () => {
+            const config = LEVELS[this.selectedLevel - 1];
+            levelText.setText(`Level ${this.selectedLevel}: ${config.name}`);
+            levelText.setColor('#ffffff');
+            // Give it a subtle glow based on theme
+            levelText.setShadow(0, 0, '#ffffff', 10, true, true);
+        };
+
+        // Left Arrow
+        const leftArrow = this.add.text(-220, 0, '◀', {
+            fontSize: '32px',
+            color: '#ffffff'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        leftArrow.on('pointerdown', () => {
+            this.selectedLevel = this.selectedLevel > 1 ? this.selectedLevel - 1 : 9;
+            updateLevelUI();
+            this.tweens.add({ targets: leftArrow, scale: 1.2, duration: 100, yoyo: true });
+        });
+
+        // Right Arrow
+        const rightArrow = this.add.text(220, 0, '▶', {
+            fontSize: '32px',
+            color: '#ffffff'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        rightArrow.on('pointerdown', () => {
+            this.selectedLevel = this.selectedLevel < 9 ? this.selectedLevel + 1 : 1;
+            updateLevelUI();
+            this.tweens.add({ targets: rightArrow, scale: 1.2, duration: 100, yoyo: true });
+        });
+
+        levelContainer.add(leftArrow);
+        levelContainer.add(rightArrow);
+
+        // Hover effects for arrows
+        [leftArrow, rightArrow].forEach(arrow => {
+            arrow.on('pointerover', () => arrow.setAlpha(0.7));
+            arrow.on('pointerout', () => arrow.setAlpha(1));
+        });
 
         // Settings button
         const settingsContainer = this.add.container(width / 2, buttonsY + 150);

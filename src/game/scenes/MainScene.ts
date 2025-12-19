@@ -137,8 +137,8 @@ export class MainScene extends Phaser.Scene {
         this.expressionTimer = this.time.now + 2000;
         this.player.setDisplaySize(120, 120); // Perfect size for prominence
         this.player.setCollideWorldBounds(true);
-        this.player.body.setSize(60, 50);
-        this.player.body.setOffset((this.player.width - 60) / 2, (this.player.height - 50));
+        this.player.body.setCircle(20); // Circle hitbox slides better around corners
+        this.player.body.setOffset((this.player.width / 2) - 20, (this.player.height / 2) - 0); // Bottom-aligned circle
 
         // 4. Player 2
         if (this.isTwoPlayer) {
@@ -148,16 +148,20 @@ export class MainScene extends Phaser.Scene {
             this.player2.setTint(0xff0000); // Red tint for P2
             this.player2.setDisplaySize(120, 120); // Perfect size for prominence
             this.player2.setCollideWorldBounds(true);
-            this.player2.body.setSize(60, 50);
-            this.player2.body.setOffset((this.player2.width - 60) / 2, (this.player2.height - 50));
+            this.player2.body.setCircle(20);
+            this.player2.body.setOffset((this.player2.width / 2) - 20, (this.player2.height / 2) - 0);
 
             this.physics.add.collider(this.player2, this.walls);
             this.physics.add.collider(this.player2, this.blocks);
-            this.physics.add.collider(this.player2, this.bombs, undefined, (_p2, bomb: any) => {
-                // Only the player who placed it gets a brief grace period
+            this.physics.add.collider(this.player2, this.bombs, undefined, (p2, bomb: any) => {
+                // Better Bomberman logic: Allow passage if overlapping, then block once stepped off
                 const isOwner = bomb.getData('owner') === 2;
-                const justPlaced = bomb.getData('justPlaced');
-                return !(isOwner && justPlaced);
+                if (!isOwner) return true;
+
+                // If we are already overlapping, let us keep moving
+                const body = (p2 as any).body;
+                const bbody = bomb.body;
+                return !Phaser.Geom.Intersects.RectangleToRectangle(body.getBounds(new Phaser.Geom.Rectangle()), bbody.getBounds(new Phaser.Geom.Rectangle()));
             }, this);
 
             // Collisions with bad things
@@ -191,11 +195,14 @@ export class MainScene extends Phaser.Scene {
         // 6. Collisions (P1)
         this.physics.add.collider(this.player, this.walls);
         this.physics.add.collider(this.player, this.blocks);
-        this.physics.add.collider(this.player, this.bombs, undefined, (_p1, bomb: any) => {
-            // Only the player who placed it gets a brief grace period
+        this.physics.add.collider(this.player, this.bombs, undefined, (p1, bomb: any) => {
+            // Better Bomberman logic: Allow passage if overlapping, then block once stepped off
             const isOwner = bomb.getData('owner') === 1;
-            const justPlaced = bomb.getData('justPlaced');
-            return !(isOwner && justPlaced);
+            if (!isOwner) return true;
+
+            const body = (p1 as any).body;
+            const bbody = bomb.body;
+            return !Phaser.Geom.Intersects.RectangleToRectangle(body.getBounds(new Phaser.Geom.Rectangle()), bbody.getBounds(new Phaser.Geom.Rectangle()));
         }, this);
         this.physics.add.collider(this.enemies, this.walls);
         this.physics.add.collider(this.enemies, this.blocks);
@@ -245,19 +252,36 @@ export class MainScene extends Phaser.Scene {
                 body.setVelocityX(-this.playerSpeed);
                 this.player.setFlipX(true);
                 isMoving = true;
+                // Auto-align to Y center (lane guiding)
+                const centerY = Math.floor(this.player.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+                const offset = centerY - this.player.y;
+                if (Math.abs(offset) < 25) body.setVelocityY(offset * 8);
             } else if (this.cursors.right.isDown) {
                 body.setVelocityX(this.playerSpeed);
                 this.player.setFlipX(false);
                 isMoving = true;
+                // Auto-align to Y center
+                const centerY = Math.floor(this.player.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+                const offset = centerY - this.player.y;
+                if (Math.abs(offset) < 25) body.setVelocityY(offset * 8);
             }
 
             if (this.cursors.up.isDown) {
                 body.setVelocityY(-this.playerSpeed);
                 isMoving = true;
+                // Auto-align to X center
+                const centerX = Math.floor(this.player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+                const offset = centerX - this.player.x;
+                if (Math.abs(offset) < 25) body.setVelocityX(offset * 8);
             } else if (this.cursors.down.isDown) {
                 body.setVelocityY(this.playerSpeed);
                 isMoving = true;
+                // Auto-align to X center
+                const centerX = Math.floor(this.player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+                const offset = centerX - this.player.x;
+                if (Math.abs(offset) < 25) body.setVelocityX(offset * 8);
             }
+
 
             // Walking animation
             if (isMoving && this.expressionTimer === 0) {
@@ -274,7 +298,10 @@ export class MainScene extends Phaser.Scene {
                 this.player.setDisplaySize(120, 120);
             }
 
-            body.velocity.normalize().scale(this.playerSpeed);
+            // Apply final normalization to maintain consistent speed
+            if (body.velocity.x !== 0 || body.velocity.y !== 0) {
+                body.velocity.normalize().scale(this.playerSpeed);
+            }
 
             if (Phaser.Input.Keyboard.JustDown(this.cursors.space)) {
                 const timeSinceLastPress = time - this.p1LastSpacePress;
@@ -314,18 +341,34 @@ export class MainScene extends Phaser.Scene {
                 body2.setVelocityX(-this.p2Speed);
                 this.player2.setFlipX(true);
                 isMoving = true;
+                // Auto-align to Y center
+                const centerY = Math.floor(this.player2.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+                const offset = centerY - this.player2.y;
+                if (Math.abs(offset) < 25) body2.setVelocityY(offset * 8);
             } else if (this.wasd.right.isDown) {
                 body2.setVelocityX(this.p2Speed);
                 this.player2.setFlipX(false);
                 isMoving = true;
+                // Auto-align to Y center
+                const centerY = Math.floor(this.player2.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+                const offset = centerY - this.player2.y;
+                if (Math.abs(offset) < 25) body2.setVelocityY(offset * 8);
             }
 
             if (this.wasd.up.isDown) {
                 body2.setVelocityY(-this.p2Speed);
                 isMoving = true;
+                // Auto-align to X center
+                const centerX = Math.floor(this.player2.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+                const offset = centerX - this.player2.x;
+                if (Math.abs(offset) < 25) body2.setVelocityX(offset * 8);
             } else if (this.wasd.down.isDown) {
                 body2.setVelocityY(this.p2Speed);
                 isMoving = true;
+                // Auto-align to X center
+                const centerX = Math.floor(this.player2.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+                const offset = centerX - this.player2.x;
+                if (Math.abs(offset) < 25) body2.setVelocityX(offset * 8);
             }
 
             // Walking animation for P2
@@ -344,7 +387,9 @@ export class MainScene extends Phaser.Scene {
                 this.player2.setTint(0xff0000); // Maintain red tint
             }
 
-            body2.velocity.normalize().scale(this.p2Speed);
+            if (body2.velocity.x !== 0 || body2.velocity.y !== 0) {
+                body2.velocity.normalize().scale(this.p2Speed);
+            }
 
             if (Phaser.Input.Keyboard.JustDown(this.wasd.space)) {
                 const timeSinceLastPress = time - this.p2LastSpacePress;
@@ -541,8 +586,13 @@ export class MainScene extends Phaser.Scene {
 
         if (active >= maxBombs) return;
 
+        // Use Math.floor on the center point to get the grid coordinate
         const bx = Math.floor(p.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
         const by = Math.floor(p.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+
+        // Self-Correction: Snap player slightly towards the bomb center for a "solid" feel
+        p.x = Phaser.Math.Linear(p.x, bx, 0.2);
+        p.y = Phaser.Math.Linear(p.y, by, 0.2);
 
         // @ts-ignore
         const existing = this.bombs.getChildren().find((b: Phaser.Physics.Arcade.Sprite) => b.x === bx && b.y === by);
@@ -1093,14 +1143,18 @@ export class MainScene extends Phaser.Scene {
                         p = this.powerups.create(block.x, block.y, 'icon_remote') as Phaser.Physics.Arcade.Sprite;
                         p.setData('kind', 'remote');
                         console.log('Spawned remote at', block.x, block.y);
-                    } else if (rand < 0.95) {
+                    } else if (rand < 0.90) {
                         p = this.powerups.create(block.x, block.y, 'icon_hand') as Phaser.Physics.Arcade.Sprite;
                         p.setData('kind', 'glove');
                         console.log('Spawned glove at', block.x, block.y);
-                    } else {
+                    } else if (rand < 0.96) {
                         p = this.powerups.create(block.x, block.y, 'icon_portal') as Phaser.Physics.Arcade.Sprite;
                         p.setData('kind', 'portal');
                         console.log('Spawned portal at', block.x, block.y);
+                    } else {
+                        p = this.powerups.create(block.x, block.y, 'icon_puppet') as Phaser.Physics.Arcade.Sprite;
+                        p.setData('kind', 'puppet');
+                        console.log('Spawned puppet at', block.x, block.y);
                     }
 
                     // Ensure visibility
@@ -1140,24 +1194,45 @@ export class MainScene extends Phaser.Scene {
             else if (kind === 'remote') this.hasRemote = true;
             else if (kind === 'glove') this.hasGlove = true;
             else if (kind === 'portal') {
-                // Portal: Walk through walls for 10 seconds
+                // Portal: Phase through everything for 10 seconds
                 this.player.setTint(0x00ffff); // Cyan tint
                 this.physics.world.colliders.getActive().forEach((collider: any) => {
-                    if (collider.object1 === this.player && collider.object2 === this.walls) {
+                    if (collider.object1 === this.player && (collider.object2 === this.walls || collider.object2 === this.blocks)) {
                         collider.active = false;
                     }
                 });
 
-                // Re-enable wall collision after 10 seconds
+                // Re-enable collision after 10 seconds
                 this.time.delayedCall(10000, () => {
                     if (this.player && this.player.active) {
                         this.player.clearTint();
                         this.physics.world.colliders.getActive().forEach((collider: any) => {
-                            if (collider.object1 === this.player && collider.object2 === this.walls) {
+                            if (collider.object1 === this.player && (collider.object2 === this.walls || collider.object2 === this.blocks)) {
                                 collider.active = true;
                             }
                         });
                     }
+                });
+            }
+            else if (kind === 'puppet') {
+                // Puppet: Mind Control - Enemies stop and become harmless
+                this.player.setTint(0xff66ff); // Pink/Purple tint
+                this.enemies.getChildren().forEach((e: any) => {
+                    e.setTint(0xff66ff);
+                    e.setData('isControlled', true);
+                    e.body.enable = false; // Disable their physics/collision damage
+                });
+
+                // Release after 10 seconds
+                this.time.delayedCall(10000, () => {
+                    if (this.player && this.player.active) {
+                        this.player.clearTint();
+                    }
+                    this.enemies.getChildren().forEach((e: any) => {
+                        e.clearTint();
+                        e.setData('isControlled', false);
+                        e.body.enable = true;
+                    });
                 });
             }
             // Legacy check
@@ -1174,25 +1249,48 @@ export class MainScene extends Phaser.Scene {
             else if (kind === 'remote') this.p2HasRemote = true;
             else if (kind === 'glove') this.p2HasGlove = true;
             else if (kind === 'portal') {
-                // Portal: Walk through walls for 10 seconds
+                // Portal: Phase through everything for 10 seconds
                 if (this.player2) {
                     this.player2.setTint(0x00ffff); // Cyan tint
                     this.physics.world.colliders.getActive().forEach((collider: any) => {
-                        if (collider.object1 === this.player2 && collider.object2 === this.walls) {
+                        if (collider.object1 === this.player2 && (collider.object2 === this.walls || collider.object2 === this.blocks)) {
                             collider.active = false;
                         }
                     });
 
-                    // Re-enable wall collision after 10 seconds
+                    // Re-enable collision after 10 seconds
                     this.time.delayedCall(10000, () => {
                         if (this.player2 && this.player2.active) {
                             this.player2.clearTint();
                             this.physics.world.colliders.getActive().forEach((collider: any) => {
-                                if (collider.object1 === this.player2 && collider.object2 === this.walls) {
+                                if (collider.object1 === this.player2 && (collider.object2 === this.walls || collider.object2 === this.blocks)) {
                                     collider.active = true;
                                 }
                             });
                         }
+                    });
+                }
+            }
+            else if (kind === 'puppet') {
+                // Puppet: Mind Control - Enemies stop and become harmless
+                if (this.player2) {
+                    this.player2.setTint(0xff66ff); // Pink/Purple tint
+                    this.enemies.getChildren().forEach((e: any) => {
+                        e.setTint(0xff66ff);
+                        e.setData('isControlled', true);
+                        e.body.enable = false;
+                    });
+
+                    // Release after 10 seconds
+                    this.time.delayedCall(10000, () => {
+                        if (this.player2 && this.player2.active) {
+                            this.player2.clearTint();
+                        }
+                        this.enemies.getChildren().forEach((e: any) => {
+                            e.clearTint();
+                            e.setData('isControlled', false);
+                            e.body.enable = true;
+                        });
                     });
                 }
             }

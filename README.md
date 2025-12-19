@@ -24,8 +24,8 @@ A modern, HD remake of the classic Bomberman game built with Phaser 3, React, an
   - 💣 **Power Bomb** - Maximum range on first bomb
   - 📡 **Remote** - Manual bomb detonation
   - 🧤 **Glove** - Pick up and throw bombs
-  - 🌀 **Portal** - Teleportation (coming soon)
-  - 🎭 **Puppet** - Mind control (coming soon)
+  - 🌀 **Portal** - Phase through blocks and walls
+  - 🎭 **Puppet** - Mind control: Pacify all enemies
 
 ### 🎭 Character Expressions
 - **7 Different Expressions**: Ready, Happy, Angry, Annoyed, Bored, Cheeky, Lovestruck
@@ -168,14 +168,12 @@ bomberman-xl/
 - [x] Sound effects and music
 - [x] Walking animations
 - [x] Death animations
-- [x] Particle system (ready for integration)
-- [x] Multi-level system (ready for integration)
+- [x] Multi-level system with 9 themes
+- [x] Portal (Phase) power-up implementation
+- [x] Puppet (Mind Control) power-up
 
-### 🚧 In Progress
-- [ ] Integrate particle effects
-- [ ] Integrate level progression
-- [ ] Portal power-up implementation
-- [ ] Puppet (mind control) power-up
+- [ ] Integrate particle effects (fire/smoke)
+- [ ] Refine boss fight mechanics
 
 ### 📋 Planned
 - [ ] Achievements system
