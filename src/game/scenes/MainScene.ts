@@ -526,8 +526,7 @@ export class MainScene extends Phaser.Scene {
                     ];
 
                     // Priority 1: Forward or Left/Right (No U-Turn)
-                    const choices = dirs.filter(d => {
-                        // Avoid U-Turns unless forced
+                    let choices = dirs.filter(d => {
                         if (vx > 0 && d.x < 0) return false;
                         if (vx < 0 && d.x > 0) return false;
                         if (vy > 0 && d.y < 0) return false;
@@ -535,9 +534,32 @@ export class MainScene extends Phaser.Scene {
                         return !this.isGridBlocked(d.tx, d.ty);
                     });
 
+                    // Aggressive Logic: If Type > 1, try to move fast towards player
+                    if (enemy.getData('type') > 1) {
+                        const target = this.player; // Target P1 by default
+                        if (target && target.active) {
+                            const distToP = Phaser.Math.Distance.Between(enemy.x, enemy.y, target.x, target.y);
+                            if (distToP < 400) { // Aggro range
+                                // Sort choices by distance to player
+                                choices.sort((a, b) => {
+                                    const da = Phaser.Math.Distance.Between(a.tx, a.ty, target.x, target.y);
+                                    const db = Phaser.Math.Distance.Between(b.tx, b.ty, target.x, target.y);
+                                    return da - db;
+                                });
+                            }
+                        }
+                    }
+
                     if (choices.length > 0) {
-                        const move = Phaser.Utils.Array.GetRandom(choices);
-                        enemy.setVelocity(move.x, move.y);
+                        // Pick the best one (index 0) if aggressive, or random if basic
+                        if (enemy.getData('type') > 1) {
+                            // 80% chance to pick best path for smart enemies
+                            if (Math.random() < 0.8) enemy.setVelocity(choices[0].x, choices[0].y);
+                            else enemy.setVelocity(Phaser.Utils.Array.GetRandom(choices).x, Phaser.Utils.Array.GetRandom(choices).y);
+                        } else {
+                            const move = Phaser.Utils.Array.GetRandom(choices);
+                            enemy.setVelocity(move.x, move.y);
+                        }
                     } else {
                         // Priority 2: U-Turn fallback
                         const fallback = dirs.filter(d => !this.isGridBlocked(d.tx, d.ty));
@@ -804,6 +826,9 @@ export class MainScene extends Phaser.Scene {
         // Use Math.floor on the center point to get the grid coordinate
         const bx = Math.floor(p.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
         const by = Math.floor(p.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+
+        // Strict Check: Cannot place bomb on another bomb OR a block/wall
+        if (this.isGridBlocked(bx, by)) return;
 
         // Self-Correction: Snap player slightly towards the bomb center for a "solid" feel
         p.x = Phaser.Math.Linear(p.x, bx, 0.2);
