@@ -19,6 +19,11 @@ export class BootScene extends Phaser.Scene {
         this.load.image('hd_player_left_step', `assets/hd_player_left_step.png?v=${v}`);
         this.load.image('hd_player_right_step', `assets/hd_player_right_step.png?v=${v}`);
 
+        // Dance Move Assets
+        for (let i = 1; i <= 8; i++) {
+            this.load.image(`hd_player_dance${i}`, `assets/hd_player_dance${i}.png?v=${v}`);
+        }
+
         this.load.image('enemy_1', `assets/enemy_1.png?v=${v}`);
         this.load.image('enemy_2', `assets/enemy_2.png?v=${v}`);
         this.load.image('enemy_3', `assets/enemy_3.png?v=${v}`);
@@ -31,6 +36,7 @@ export class BootScene extends Phaser.Scene {
         this.load.image('icon_flame', `assets/icon_flame.png?v=${v}`);
         this.load.image('icon_powerbomb', `assets/icon_powerbomb.png?v=${v}`);
         this.load.image('icon_puppet', `assets/icon_puppet.png?v=${v}`);
+        this.load.image('icon_skull', `assets/hd_icon_skull.png?v=${v}`);
 
         // Block types for different levels
         this.load.image('wood_block', `assets/wood_block_1.png?v=${v}`);

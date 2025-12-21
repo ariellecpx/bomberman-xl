@@ -11,6 +11,14 @@ export class SoundManager {
         this.masterGain.connect(this.ctx.destination);
     }
 
+    setMute(muted: boolean) {
+        if (muted) {
+            this.masterGain.gain.value = 0;
+        } else {
+            this.masterGain.gain.value = 0.3; // Restore master volume
+        }
+    }
+
     // Load background music from MP3
     loadBackgroundMusic(path: string = 'assets/sounds/background_music.mp3') {
         this.backgroundMusic = new Audio(path);
@@ -128,15 +136,19 @@ export class SoundManager {
         osc.connect(gain);
         gain.connect(this.masterGain);
 
-        osc.frequency.setValueAtTime(600, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.5);
+        const now = this.ctx.currentTime;
 
-        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+        // Descending "Whirrr-rr-rr"
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.linearRampToValueAtTime(110, now + 0.5);
 
-        osc.type = 'square';
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.5);
+        // Tremolo effect
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.5);
+
+        osc.type = 'sawtooth';
+        osc.start(now);
+        osc.stop(now + 0.5);
     }
 
     // New: Menu click sound

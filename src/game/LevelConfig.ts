@@ -12,6 +12,9 @@ export interface LevelConfig {
     hasIce?: boolean;
     hasWind?: boolean;
     isDark?: boolean;
+    isVolcanic?: boolean;
+    hasSpores?: boolean;
+    hasTeleporters?: boolean;
 }
 
 export const LEVELS: LevelConfig[] = [
@@ -70,7 +73,7 @@ export const LEVELS: LevelConfig[] = [
         enemySpeed: 140,
         powerupChance: 0.25,
         blockDensity: 0.75,
-        hasWind: true
+        hasTeleporters: true
     },
     {
         level: 6,
@@ -93,7 +96,8 @@ export const LEVELS: LevelConfig[] = [
         enemyCount: 9,
         enemySpeed: 160,
         powerupChance: 0.2,
-        blockDensity: 0.85
+        blockDensity: 0.85,
+        hasSpores: true
     },
     {
         level: 8,
@@ -104,7 +108,8 @@ export const LEVELS: LevelConfig[] = [
         enemyCount: 10,
         enemySpeed: 170,
         powerupChance: 0.15,
-        blockDensity: 0.9
+        blockDensity: 0.9,
+        isVolcanic: true
     },
     {
         level: 9,

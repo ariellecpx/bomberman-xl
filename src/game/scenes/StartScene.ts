@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { startScreenMusic, gameMusic } from '../AudioPlayer';
+import { startScreenMusic, gameMusic, toggleGlobalAudio, isAudioMuted } from '../AudioPlayer';
 import { LEVELS } from '../LevelConfig';
 
 export class StartScene extends Phaser.Scene {
@@ -140,10 +140,28 @@ export class StartScene extends Phaser.Scene {
         hero.setAlpha(0.7);
         hero.setDepth(3);
 
-        // Hero idle animation
+        // Hero Glow (Red Pulsing Orb)
+        const heroGlow = this.add.image(width / 2, height / 2 - 40, 'hd_player_ready');
+        heroGlow.setDisplaySize(420, 420); // Match hero
+        heroGlow.setAlpha(0);
+        heroGlow.setDepth(3);
+        heroGlow.setTint(0xff0000);
+        heroGlow.setBlendMode(Phaser.BlendModes.ADD);
+
+        // Hero idle animation (Sync both)
         this.tweens.add({
-            targets: hero,
+            targets: [hero, heroGlow],
             y: hero.y - 15,
+            duration: 1200,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // Glow Pulse Animation
+        this.tweens.add({
+            targets: heroGlow,
+            alpha: { from: 0, to: 0.8 },
             duration: 1200,
             yoyo: true,
             repeat: -1,
@@ -172,12 +190,17 @@ export class StartScene extends Phaser.Scene {
                     duration: 200,
                     ease: 'Cubic.easeIn',
                     onComplete: () => {
-                        // Change expression
+                        // Change expression on both
                         currentExpressionIndex = (currentExpressionIndex + 1) % expressions.length;
-                        hero.setTexture(expressions[currentExpressionIndex]);
-                        hero.setDisplaySize(420, 420); // Ensure size stays consistent
+                        const nextTex = expressions[currentExpressionIndex];
 
-                        // Fade in
+                        hero.setTexture(nextTex);
+                        hero.setDisplaySize(420, 420);
+
+                        heroGlow.setTexture(nextTex);
+                        heroGlow.setDisplaySize(420, 420);
+
+                        // Fade in (Glow stays on its independent loop)
                         this.tweens.add({
                             targets: hero,
                             alpha: 0.7,
@@ -585,12 +608,18 @@ export class StartScene extends Phaser.Scene {
                 });
 
                 // Character gets worried and shakes
+                // Character gets worried and shakes
                 this.time.delayedCall(200, () => {
                     hero.setTexture('hd_player_scared');
                     hero.setDisplaySize(360, 360);
 
+                    heroGlow.setTexture('hd_player_scared');
+                    heroGlow.setDisplaySize(360, 360);
+                    heroGlow.setAlpha(0); // Hide glow while scared? Or keep pulsing? 
+                    // Let's keep it but maybe faster pulse? Or just simple sync.
+
                     this.tweens.add({
-                        targets: hero,
+                        targets: [hero, heroGlow],
                         x: hero.x + 5,
                         duration: 50,
                         yoyo: true,
@@ -749,6 +778,103 @@ export class StartScene extends Phaser.Scene {
                 duration: 300,
                 ease: 'Cubic.easeOut'
             });
+        });
+
+        // Audio Mute Button (Top Right)
+        const muteBtn = this.add.container(width - 50, 50);
+        muteBtn.setDepth(200);
+
+        // Background circle (glassy)
+        const muteBg = this.add.graphics();
+        muteBg.fillStyle(0xffffff, 0.1);
+        muteBg.fillCircle(0, 0, 24);
+        muteBg.lineStyle(1, 0xffffff, 0.3);
+        muteBg.strokeCircle(0, 0, 24);
+        muteBtn.add(muteBg);
+
+        const muteIcon = this.add.graphics();
+        muteBtn.add(muteIcon);
+
+        const drawMuteIcon = () => {
+            muteIcon.clear();
+            // Speaker Body (Modern, rounded)
+            muteIcon.fillStyle(0xffffff, 1);
+            muteIcon.fillRoundedRect(-6, -6, 12, 12, 3);
+            muteIcon.fillTriangle(-4, 0, -10, -6, -10, 6); // Add stylized tail if desired, or keep it minimal
+
+            // Clean minimalistic speaker
+            muteIcon.clear();
+            muteIcon.fillStyle(0xffffff, 0.9);
+
+            // Base block
+            muteIcon.fillRoundedRect(-8, -5, 6, 10, 2);
+
+            // Trapezoid cone
+            muteIcon.beginPath();
+            muteIcon.moveTo(-2, -5);
+            muteIcon.lineTo(6, -9);
+            muteIcon.lineTo(6, 9);
+            muteIcon.lineTo(-2, 5);
+            muteIcon.closePath();
+            muteIcon.fill();
+
+            if (isAudioMuted()) {
+                // Sleek Slash through
+                muteIcon.lineStyle(2.5, 0xff5555, 1);
+                muteIcon.beginPath();
+                muteIcon.moveTo(12, -6);
+                muteIcon.lineTo(18, 6);
+                muteIcon.moveTo(18, -6);
+                muteIcon.lineTo(12, 6);
+                muteIcon.strokePath();
+
+                // Small "x" badge
+                muteIcon.lineStyle(2, 0xff5555, 1);
+                muteIcon.beginPath();
+                muteIcon.moveTo(12, -4);
+                muteIcon.lineTo(18, 4);
+                muteIcon.moveTo(18, -4);
+                muteIcon.lineTo(12, 4);
+                muteIcon.strokePath();
+            } else {
+                // Modern arcs (Spotify-style)
+                muteIcon.lineStyle(2, 0xffffff, 0.9);
+                muteIcon.beginPath();
+                muteIcon.arc(4, 0, 7, -0.7, 0.7);
+                muteIcon.strokePath();
+
+                muteIcon.lineStyle(2, 0xffffff, 0.6);
+                muteIcon.beginPath();
+                muteIcon.arc(4, 0, 11, -0.6, 0.6);
+                muteIcon.strokePath();
+            }
+        };
+
+        drawMuteIcon();
+
+        muteBtn.setInteractive(new Phaser.Geom.Circle(0, 0, 24), Phaser.Geom.Circle.Contains);
+        muteBtn.on('pointerdown', () => {
+            toggleGlobalAudio();
+            drawMuteIcon();
+            this.tweens.add({ targets: muteBtn, scale: 0.9, duration: 50, yoyo: true });
+        });
+
+        muteBtn.on('pointerover', () => {
+            muteBg.clear();
+            muteBg.fillStyle(0xffffff, 0.2);
+            muteBg.fillCircle(0, 0, 24);
+            muteBg.lineStyle(1, 0xffffff, 0.5);
+            muteBg.strokeCircle(0, 0, 24);
+            this.tweens.add({ targets: muteBtn, scale: 1.1, duration: 200, ease: 'Cubic.easeOut' });
+        });
+
+        muteBtn.on('pointerout', () => {
+            muteBg.clear();
+            muteBg.fillStyle(0xffffff, 0.1);
+            muteBg.fillCircle(0, 0, 24);
+            muteBg.lineStyle(1, 0xffffff, 0.3);
+            muteBg.strokeCircle(0, 0, 24);
+            this.tweens.add({ targets: muteBtn, scale: 1.0, duration: 200, ease: 'Cubic.easeOut' });
         });
     }
 }
